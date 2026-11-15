@@ -8,7 +8,7 @@ import { IconAtom, IconBarChart, IconBookOpen, IconChevronDown, IconCode,
 
 export type RibbonTab = "Archivo" | "Inicio" | "Insertar" | "Matemáticas" | "Datos" | "Vista";
 export type RibbonAction =
-  | "open" | "save" | "export-html"
+  | "open" | "save" | "export-html" | "examples"
   | "h1" | "h2" | "h3" | "bold" | "italic" | "code" | "quote" | "list" | "rule"
   | "formula" | "graph" | "table" | "picture"
   | "equation" | "inline-math" | "matrix" | "integral" | "slider"
@@ -28,7 +28,7 @@ const item = (id: RibbonAction, label: string, icon?: ActionSpec["icon"], hint?:
 export const RIBBON_GROUPS: Record<RibbonTab, readonly RibbonGroup[]> = {
   Archivo: [{label:"Documento",actions:[
     item("open","Abrir","folder","Ctrl+O"),item("save","Guardar","save","Ctrl+S"),
-    item("export-html","Exportar HTML","file")]}],
+    item("export-html","Exportar HTML","file"),item("examples","Abrir ejemplo","book")]}],
   Inicio: [
     {label:"Estilos",actions:[item("h1","Título 1"),item("h2","Título 2"),item("h3","Título 3")]},
     {label:"Formato",actions:[item("bold","Negrita",undefined,"Ctrl+B"),item("italic","Cursiva"),

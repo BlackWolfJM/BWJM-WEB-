@@ -25,7 +25,12 @@ import {
 } from "@mathmd/math";
 import type { CheckboxNode, MathMDNode, SliderNode, TimelineNode, DataTableNode, FunctionTableNode, Parametric2DNode } from "@mathmd/ast";
 import type { CalculusVizResult, VectorStudyResult } from "@mathmd/math";
-import { SidebarLeft, OutlineItem, type SidebarTab } from "./SidebarLeft.js";
+import { SidebarLeft, type OutlineItem, type SidebarTab, type SidebarMode } from "./SidebarLeft.js";
+import {
+  SIDEBAR_MODE_KEY, SIDEBAR_TAB_KEY,
+  normalizeSidebarMode, normalizeSidebarTab,
+  readSidebarPreference, saveSidebarPreference,
+} from "./sidebarPreferences.js";
 import { Ribbon, type RibbonAction } from "./Ribbon.js";
 import { DocumentTabs } from "./DocumentTabs.js";
 import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
@@ -34,7 +39,7 @@ import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
 import { resetSurfaceColor, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
-import { IconAtom, IconCheck } from "./icons.js";
+import { IconAtom, IconCheck, IconSidebar } from "./icons.js";
 import { FormulaModal } from "./FormulaModal.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
 import { ImageModal, type ImageInsertion } from "./ImageModal.js";
@@ -480,7 +485,7 @@ function extractOutline(source: string): OutlineItem[] {
 
 export function BWJMStudio() {
   const {
-    documents, activeId, markdown, filename, selectedTemplate, setMarkdown,
+    documents, activeId, markdown, filename, setMarkdown,
     openDocument, createDocument, selectDocument, closeDocument, markSaved, renameDocument,
     insertAtDocumentSnapshot,
   } = useDocumentWorkspace("sin_titulo.bwjm", "");
@@ -514,12 +519,38 @@ export function BWJMStudio() {
       }
     }
   }, []); // Run only once on mount
-  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
+  const [desktopSidebarMode, setDesktopSidebarMode] = useState<SidebarMode>(() =>
+    normalizeSidebarMode(readSidebarPreference(SIDEBAR_MODE_KEY)));
   const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
-  const [isSidebarLeftOpen, setIsSidebarLeftOpen] = compactWorkspace
-    ? [compactSidebarOpen, setCompactSidebarOpen]
-    : [desktopSidebarOpen, setDesktopSidebarOpen];
+  const sidebarMode: SidebarMode = compactWorkspace
+    ? (compactSidebarOpen ? "expanded" : "hidden") : desktopSidebarMode;
   const compactSidebarVisible = compactWorkspace && compactSidebarOpen;
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(() =>
+    normalizeSidebarTab(readSidebarPreference(SIDEBAR_TAB_KEY)));
+
+  useEffect(() => {
+    saveSidebarPreference(SIDEBAR_MODE_KEY, desktopSidebarMode);
+  }, [desktopSidebarMode]);
+  useEffect(() => {
+    saveSidebarPreference(SIDEBAR_TAB_KEY, sidebarTab);
+  }, [sidebarTab]);
+
+  const showSidebar = () => {
+    if (compactWorkspace) setCompactSidebarOpen(true);
+    else setDesktopSidebarMode("expanded");
+  };
+  const hideSidebar = () => {
+    if (compactWorkspace) setCompactSidebarOpen(false);
+    else setDesktopSidebarMode("hidden");
+  };
+  const toggleSidebar = () => {
+    if (compactWorkspace) setCompactSidebarOpen(value => !value);
+    else setDesktopSidebarMode(value => value === "hidden" ? "expanded" : "hidden");
+  };
+  const showSidebarTab = (tab: SidebarTab) => {
+    setSidebarTab(tab);
+    showSidebar();
+  };
   const setViewMode = (mode: ViewMode) => {
     if (!compactWorkspace) {
       setDesktopView(mode);
@@ -528,7 +559,6 @@ export function BWJMStudio() {
       setCompactSidebarOpen(false);
     }
   };
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("outline");
   const [isRibbonCollapsed, setIsRibbonCollapsed] = useState(false);
   const [imageTarget, setImageTarget] = useState<{ id: string; source: string; offset: number }>();
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState<boolean>(false);
@@ -541,6 +571,7 @@ export function BWJMStudio() {
   };
   const [isChartModalOpen, setIsChartModalOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [examplePickerOpen, setExamplePickerOpen] = useState(false);
   const [imageMessage, setImageMessage] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -568,7 +599,7 @@ export function BWJMStudio() {
   }, [compactSidebarVisible]);
 
   const closeSidebar = () => {
-    setIsSidebarLeftOpen(false);
+    hideSidebar();
     if (compactWorkspace) {
       compactViewRef.current?.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')?.focus();
     }
@@ -642,11 +673,17 @@ export function BWJMStudio() {
         e.preventDefault();
         searchRef.current?.focus();
         searchRef.current?.select();
+      } else if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey &&
+        (e.code === "Backslash" || e.code === "IntlBackslash")) {
+        // Ctrl+B remains the editor's bold shortcut.
+        e.preventDefault();
+        toggleSidebar();
       } else if ((e.ctrlKey || e.metaKey) && e.key === "F1") {
         e.preventDefault();
         setIsRibbonCollapsed(value => !value);
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        setExamplePickerOpen(false);
         setIsCommandPaletteOpen((prev) => !prev);
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "m") {
         e.preventDefault();
@@ -662,7 +699,7 @@ export function BWJMStudio() {
 
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [filename, markdown, imageTarget]);
+  }, [filename, markdown, imageTarget, compactWorkspace]);
 
   /**
    * Generates a document manifest with current state for reproducible reopening.
@@ -980,12 +1017,13 @@ initialConditions:
       case "view-editor": setViewMode("editor"); break;
       case "view-split": setViewMode("split"); break;
       case "view-reader": setViewMode("reader"); break;
-      case "outline": setSidebarTab("outline"); setIsSidebarLeftOpen(true); break;
-      case "inspector": setSidebarTab("inspector"); setIsSidebarLeftOpen(true); break;
+      case "outline": showSidebarTab("outline"); break;
+      case "inspector": showSidebarTab("inspector"); break;
       case "theme-linear": setTheme("linear"); break;
       case "theme-catppuccin": setTheme("catppuccin"); break;
       case "theme-tokyonight": setTheme("tokyonight"); break;
-      case "commands": setIsCommandPaletteOpen(true); break;
+      case "commands": setExamplePickerOpen(false); setIsCommandPaletteOpen(true); break;
+      case "examples": setExamplePickerOpen(true); setIsCommandPaletteOpen(true); break;
     }
   };
 
@@ -1055,15 +1093,16 @@ initialConditions:
     },
     {
       id: "toggle-outline",
-      title: "Alternar Panel Izquierdo (Esquema/Variables)",
+      title: "Mostrar u ocultar el panel Documento",
       category: "Paneles",
-      action: () => setIsSidebarLeftOpen((prev) => !prev),
+      shortcut: "Ctrl+\\",
+      action: toggleSidebar,
     },
     {
       id: "toggle-props",
       title: "Alternar Panel Derecho (Propiedades)",
       category: "Paneles",
-      action: () => { setIsSidebarLeftOpen(true); setSidebarTab("inspector"); },
+      action: () => showSidebarTab("inspector"),
     },
     {
       id: "theme-linear",
@@ -1085,40 +1124,40 @@ initialConditions:
     },
     {
       id: "load-lesson-1",
-      title: "Cargar Lección: Área entre Curvas & Riemann",
-      category: "Lecciones",
+      title: "Abrir ejemplo: Área entre Curvas & Riemann",
+      category: "Ejemplos",
       action: () => {
         openDocument(SAMPLE_LESSONS.riemann.filename, SAMPLE_LESSONS.riemann.content, "riemann");
       },
     },
     {
       id: "load-lesson-2",
-      title: "Cargar Lección: Sólidos de Revolución (3π)",
-      category: "Lecciones",
+      title: "Abrir ejemplo: Sólidos de Revolución (3π)",
+      category: "Ejemplos",
       action: () => {
         openDocument(SAMPLE_LESSONS.revolution.filename, SAMPLE_LESSONS.revolution.content, "revolution");
       },
     },
     {
       id: "load-lesson-3",
-      title: "Cargar Lección: Superficie 3D y Oscilador Armónico",
-      category: "Lecciones",
+      title: "Abrir ejemplo: Superficie 3D y Oscilador Armónico",
+      category: "Ejemplos",
       action: () => {
         openDocument(SAMPLE_LESSONS.surface.filename, SAMPLE_LESSONS.surface.content, "surface");
       },
     },
     {
       id: "load-lesson-4",
-      title: "Cargar Lección: Cinemática Espacial & Marco Frenet (TNB)",
-      category: "Lecciones",
+      title: "Abrir ejemplo: Cinemática Espacial & Marco Frenet (TNB)",
+      category: "Ejemplos",
       action: () => {
         openDocument(SAMPLE_LESSONS.vector_calculus.filename, SAMPLE_LESSONS.vector_calculus.content, "vector_calculus");
       },
     },
     {
       id: "load-lesson-5",
-      title: "Cargar Lección: Campos Vectoriales 2D & Teorema de Green",
-      category: "Lecciones",
+      title: "Abrir ejemplo: Campos Vectoriales 2D & Teorema de Green",
+      category: "Ejemplos",
       action: () => {
         openDocument(SAMPLE_LESSONS.vector_field.filename, SAMPLE_LESSONS.vector_field.content, "vector_field");
       },
@@ -2552,24 +2591,27 @@ initialConditions:
 
       <div ref={workspaceLayoutRef} className="bwjm-workspace-layout"
         onKeyDown={event => { if (compactSidebarVisible && event.key === "Escape") closeSidebar(); }}>
+        {sidebarMode === "hidden" && (
+          <button type="button" className="bwjm-sidebar-restore"
+            aria-label="Mostrar panel del documento" title="Mostrar panel (Ctrl+\\)"
+            onClick={showSidebar}>
+            <IconSidebar size={17}/> <span>Documento</span>
+          </button>
+        )}
         <SidebarLeft
           tab={sidebarTab}
+          mode={sidebarMode}
           onTabChange={setSidebarTab}
+          onExpand={showSidebar}
+          onCollapse={() => setDesktopSidebarMode("collapsed")}
           wordCount={wordCount}
           charCount={charCount}
           lineCount={lineCount}
           nodes={doc.children}
           diagnostics={doc.diagnostics}
-          isOpen={isSidebarLeftOpen}
           onClose={closeSidebar}
           outline={outline}
           variables={currentVariables}
-          lessons={SAMPLE_LESSONS}
-          currentLessonKey={selectedTemplate}
-          onSelectLesson={(key: string) => {
-            openDocument(SAMPLE_LESSONS[key].filename, SAMPLE_LESSONS[key].content, key);
-            if (compactWorkspace) closeSidebar();
-          }}
           onNavigateOutline={handleNavigateOutline}
         />
 
@@ -2636,8 +2678,10 @@ initialConditions:
 
       <CommandPalette
         isOpen={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-        commands={compactWorkspace ? commandsList.filter(command => command.id !== "mode-split") : commandsList}
+        onClose={() => { setIsCommandPaletteOpen(false); setExamplePickerOpen(false); }}
+        commands={commandsList.filter(command =>
+          examplePickerOpen ? command.category === "Ejemplos" :
+            (!compactWorkspace || command.id !== "mode-split"))}
       />
     </div>
   );
