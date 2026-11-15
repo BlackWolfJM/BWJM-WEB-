@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { normalizeFilename } from "./workspaceDocuments.js";
-import { IconPlus, IconX } from "./icons.js";
+import { IconPlus, IconSidebar, IconX } from "./icons.js";
 import type { WorkspaceDocument } from "./workspaceDocuments.js";
 
 interface Props {
@@ -10,8 +10,10 @@ interface Props {
   onClose: (id: string) => void;
   onNew: () => void;
   onRename: (id: string, filename: string) => void;
+  sidebarVisible: boolean;
+  onToggleSidebar: () => void;
 }
-export const DocumentTabs: React.FC<Props> = ({ documents, activeId, onSelect, onClose, onNew, onRename }) => {
+export const DocumentTabs: React.FC<Props> = ({ documents, activeId, onSelect, onClose, onNew, onRename, sidebarVisible, onToggleSidebar }) => {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const beginRename = (id: string, name: string) => { setRenaming(id); setDraft(name); };
@@ -21,6 +23,14 @@ export const DocumentTabs: React.FC<Props> = ({ documents, activeId, onSelect, o
     setRenaming(null);
   };
   return <nav className="bwjm-document-tabs" aria-label="Documentos abiertos">
+    <button type="button"
+      className={"bwjm-document-sidebar-toggle" + (sidebarVisible ? " is-active" : "")}
+      onClick={onToggleSidebar}
+      aria-label={sidebarVisible ? "Alternar panel del documento" : "Mostrar panel del documento"}
+      aria-expanded={sidebarVisible}
+      title={sidebarVisible ? "Ocultar panel del documento (Ctrl+\\)" : "Mostrar panel del documento (Ctrl+\\)"}>
+      <IconSidebar size={17}/>
+    </button>
     <div className="bwjm-document-tab-list" role="tablist" aria-label="Archivos BWJM">
       {documents.map((document, index) =>
         <div key={document.id} className={"bwjm-document-tab " + (activeId === document.id ? "active" : "")}>
