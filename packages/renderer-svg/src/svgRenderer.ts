@@ -139,8 +139,9 @@ export class SVGRenderer {
     const minY = Math.min(...yValues), maxY = Math.max(...yValues);
     const midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
     const ratio = this.width / this.height;
-    const spanX = Math.max(maxX - minX, (maxY - minY) * ratio, 0.5) * 1.2;
-    const spanY = spanX / ratio;
+    const spanX = (node.mode === "riemann" ? Math.max(maxX - minX, 0.5)
+      : Math.max(maxX - minX, (maxY - minY) * ratio, 0.5)) * 1.2;
+    const spanY = node.mode === "riemann" ? Math.max(maxY - minY, 0.5) * 1.2 : spanX / ratio;
     const loX = midX - spanX / 2, hiX = midX + spanX / 2;
     const loY = midY - spanY / 2, hiY = midY + spanY / 2;
     const transform = this.createTransform(loX, hiX, loY, hiY);
@@ -158,7 +159,8 @@ export class SVGRenderer {
         item.setAttribute("data-y-bottom", String(polygon.points[0][1]));
         item.setAttribute("data-y-top", String(polygon.points[2][1]));
       }
-      item.setAttribute("fill", polygon.fill ?? "#93c5fd");
+      if (node.mode === "riemann") item.setAttribute("data-riemann-rectangle", "");
+      item.setAttribute("fill", node.color ?? polygon.fill ?? "#93c5fd");
       item.setAttribute("fill-opacity", "0.38");
       item.setAttribute("stroke", "#64748b");
       item.setAttribute("stroke-opacity", "0.4");

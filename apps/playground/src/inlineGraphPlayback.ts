@@ -5,18 +5,22 @@ import { advanceTime, clampUnit, fractionTime, timeFraction } from "./timelineEn
  * Only graphs with an actual animated scene get a playback control.
  * A static 3D surface or curve must never show a redundant timeline.
  */
-export function supportsInlinePlayback(node: { type: string; animated?: boolean }): boolean {
+export function supportsInlinePlayback(node: {
+  type: string; animated?: boolean; equation?: string; showParticles?: boolean;
+}): boolean {
   switch (node.type) {
     case "curve3d":
-    case "surface3d":
       return node.animated === true;
+    case "surface3d":
+      return node.animated === true && /\bt\b/.test(node.equation ?? "");
     case "parametric2d":
       return node.animated !== false; // Old parametric documents were animated by default.
     case "trajectory":
     case "particle":
     case "frame":
-    case "flow2d":
       return true;
+    case "flow2d":
+      return node.showParticles !== false;
     default:
       return false;
   }

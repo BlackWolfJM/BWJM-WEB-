@@ -18,6 +18,12 @@ const templates: Template[] = [
    help:"Cortes verticales; integra la diferencia absoluta entre curvas.",
    formula:"A = ∫ₐᵇ |f(x)−g(x)| dx",values:{f:"2*x",g:"x^2",a:"0",b:"2"},
    fields:[{key:"f",label:"y = f(x)"},{key:"g",label:"y = g(x)"},...limits] },
+ { mode:"riemann",label:"Suma de Riemann",
+   help:"Aproxima el área entre las dos curvas con rectángulos de punto medio.",
+   formula:"A ≈ Σ |f(xᵢ*) − g(xᵢ*)| Δx",
+   values:{f:"x",g:"x^2",a:"0",b:"1",partitions:"10"},
+   fields:[{key:"f",label:"y = f(x)"},{key:"g",label:"y = g(x)"},...limits,
+     {key:"partitions",label:"Número de rectángulos"}] },
  { mode:"area-dy",label:"02 · Área entre curvas — dy",
    help:"Cortes horizontales: escribe las funciones como x=f(y) y x=g(y).",
    formula:"A = ∫cᵈ |f(y)−g(y)| dy",values:{f:"y^2",g:"2*y",a:"0",b:"2"},
@@ -89,6 +95,7 @@ interface Props { onInsert: (block: string) => void }
 export const CalculusWizard: React.FC<Props> = ({onInsert}) => {
   const [mode,setMode]=useState<CalculusVizMode>("area-dx");
   const [values,setValues]=useState<Record<string,string>>({...templates[0].values});
+  const [color,setColor]=useState("#a5b4fc");
   const template=templates.find(option=>option.mode===mode)??templates[0];
   function selectTemplate(next: string) {
     if (next === mode) return;
@@ -109,6 +116,8 @@ export const CalculusWizard: React.FC<Props> = ({onInsert}) => {
     (values.axis==="y"&&values.method!=="shells")||
     (values.axis==="x"&&values.method==="shells"));
   const invalidOffset=mode==="revolution"&&!Number.isFinite(axisOffsetValue);
+  const partitions=Number(values.partitions);
+  const invalidPartitions=mode==="riemann"&&(!Number.isInteger(partitions)||partitions<1||partitions>500);
   const invalidExpr=template.fields.some(field=>!field.options &&
     !["a","b","reverseA","reverseB","axisOffset"].includes(field.key)&&
     !values[field.key]?.trim());
@@ -116,12 +125,13 @@ export const CalculusWizard: React.FC<Props> = ({onInsert}) => {
     invalidReverse?"Los límites del segundo orden no son válidos.":
     invalidAxis?"Cascarones con eje Y; discos o arandelas con eje X.":
     invalidOffset?"Desplazamiento del eje inválido.":
+    invalidPartitions?"Usa entre 1 y 500 rectángulos.":
     invalidExpr?"Completa todas las expresiones necesarias.":null;
 
   const generated=useMemo(()=>{
     const fence=String.fromCharCode(96).repeat(3);
     const lines=[fence+"calculusviz","mode: "+mode,
-      "domain: ["+aValue+", "+bValue+"]","samples: 160"];
+      "domain: ["+aValue+", "+bValue+"]","samples: 160","color: "+JSON.stringify(color)];
     ["f","g","integrand","paramX","paramY","fieldP","fieldQ","reverseLower","reverseUpper"]
       .forEach(key=>{if(values[key]&&template.fields.some(field=>field.key===key)) {
         lines.push(key+": "+JSON.stringify(values[key]));
@@ -131,14 +141,15 @@ export const CalculusWizard: React.FC<Props> = ({onInsert}) => {
       "reverseDomain: ["+reverseAValue+", "+reverseBValue+"]");
     if(mode==="revolution")lines.push("axis: "+values.axis,
       "method: "+values.method,"axisOffset: "+axisOffsetValue);
+    if(mode==="riemann")lines.push("partitions: "+partitions);
     return [...lines,fence].join("\n");
-  },[mode,values,template,aValue,bValue,reverseAValue,reverseBValue,axisOffsetValue]);
+  },[mode,values,template,aValue,bValue,reverseAValue,reverseBValue,axisOffsetValue,partitions,color]);
 
   return <section className="bwjm-calculus-wizard" aria-label="Asistente de cálculo integral">
     <header className="bwjm-calculus-wizard-header">
-      <label htmlFor="bwjm-calculus-method">Método según el tipo de ejercicio</label>
+      <label htmlFor="bwjm-calculus-method">Tipo de cálculo</label>
       <select id="bwjm-calculus-method" value={mode} onChange={event=>selectTemplate(event.target.value)}>
-        {templates.map(item=><option key={item.mode} value={item.mode}>{item.label}</option>)}
+        {templates.map(item=><option key={item.mode} value={item.mode}>{item.label.replace(/^\d+ · /, "")}</option>)}
       </select>
       <p>{template.help}</p>
       <div className="bwjm-calculus-formula">{template.formula}</div>
@@ -163,16 +174,19 @@ export const CalculusWizard: React.FC<Props> = ({onInsert}) => {
         :<input type="text" spellCheck={false} value={values[field.key]??""}
           onChange={event=>setValues(old=>({...old,[field.key]:event.target.value}))}/>}
       </label>)}
+      <label className="bwjm-modal-field bwjm-chart-color">
+        <span className="bwjm-modal-label">{mode === "revolution" ? "Color de la superficie" : "Color de la región"}</span>
+        <input type="color" value={color} onChange={event=>setColor(event.target.value)} />
+      </label>
     </div>
-    <div className="bwjm-calculus-code">
-      <strong>Bloque .bwjm generado</strong>
+    <details className="bwjm-calculus-code bwjm-chart-source">
+      <summary>Ver código .bwjm</summary>
       <pre><code>{generated}</code></pre>
-    </div>
+    </details>
     {error&&<p className="bwjm-calculus-error" role="alert">{error}</p>}
     <div className="bwjm-calculus-controls">
-      <small>Resultados numéricos aproximados; se mostrarán advertencias sobre dominio y método.</small>
       <button type="button" disabled={!!error}
-        onClick={()=>onInsert("\n"+generated+"\n")}>Insertar gráfico y cálculo</button>
+        onClick={()=>onInsert("\n"+generated+"\n")}>Insertar</button>
     </div>
   </section>;
 };

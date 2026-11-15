@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, ChangeEvent } from "react";
 import { createRoot } from "react-dom/client";
-import { parseMathMD, parseProseMarkdown, collectMarkdownDefinitions } from "@mathmd/parser";
-import { isSafeEmbeddedRasterUrl, MAX_LOCAL_IMAGE_BYTES, portableImageMarkdown, validateLocalRaster } from "./localImages.js";
+import { parseMarkdown, parseMathMDWithMarkdown } from "@mathmd/parser";
+import { MAX_LOCAL_IMAGE_BYTES, portableImageMarkdown, validateLocalRaster } from "./localImages.js";
 import { compactImageEditor } from "./compactImageEditor.js";
 import type { DocumentInsertSnapshot } from "./workspaceDocuments.js";
-import type { MdastNode } from "@mathmd/parser";
 import { MathMDCore } from "@mathmd/core";
 import { SVGRenderer } from "@mathmd/renderer-svg";
 import { PlotlyRenderer } from "@mathmd/renderer-plotly";
@@ -22,27 +21,137 @@ import {
   expressionToLatex,
   serializeScientificTable,
 } from "@mathmd/math";
-import type { CheckboxNode, MathMDDiagnostic, MathMDNode, SliderNode, TimelineNode, DataTableNode, FunctionTableNode, Parametric2DNode } from "@mathmd/ast";
-import type { VectorStudyResult } from "@mathmd/math";
+import type { CheckboxNode, MathMDNode, SliderNode, TimelineNode, DataTableNode, FunctionTableNode, Parametric2DNode } from "@mathmd/ast";
+import type { CalculusVizResult, VectorStudyResult } from "@mathmd/math";
 import { SidebarLeft, OutlineItem, type SidebarTab } from "./SidebarLeft.js";
 import { Ribbon, type RibbonAction } from "./Ribbon.js";
 import { DocumentTabs } from "./DocumentTabs.js";
-import { createAdaptiveParameterEditor } from "./AdaptiveParameterEditor.js";
 import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
 import { createCrossProductDeterminant, createCrossProductEditor, createCrossProductReport } from "./CrossProductEditor.js";
-import {
-  supportsAdaptiveParameters, writeGraphParameterControls,
-} from "./adaptiveGraphParameters.js";
-import { updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
+import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
+import { resetSurfaceColor, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
 import { FormulaModal } from "./FormulaModal.js";
-import { ChartModal } from "./ChartModal.js";
+import { ImageModal, type ImageInsertion } from "./ImageModal.js";
+import { insertEmbeddedImage } from "./documentImages.js";
+import { createMarkdownReader } from "./markdownReader.js";
+import "./markdownReader.css";
+import markdownReaderStyles from "./markdownReader.css?inline";
+import { ChartModal, chartKinds } from "./ChartModal.js";
 import { CommandPalette, CommandItem } from "./CommandPalette.js";
 import { createInlinePlayback, supportsInlinePlayback, type InlinePlaybackController } from "./inlineGraphPlayback.js";
 import { readStoredTheme, persistStudioTheme, type StudioThemeId } from "./studioThemes.js";
+import { persistDraft, getDraft, clearDraft } from "./workspaceDocuments.js";
 import "./theme.css";
+
+const graphLabels = new Map<string, string>(chartKinds);
+
+function updateCalculusReport(report: HTMLElement, data: CalculusVizResult & { error?: string }): void {
+  report.classList.toggle("has-error", Boolean(data.error));
+  if (data.error) {
+    report.textContent = "Error: " + data.error;
+    return;
+  }
+  const format = (value: number, precision = 8) => Number.isFinite(value)
+    ? String(Number(value.toPrecision(precision))) : "No determinado";
+  const metric = document.createElement("strong");
+  metric.textContent = data.valueLabel + ": " + format(data.value) + (data.unit === "valor" ? "" : " " + data.unit);
+  const method = document.createElement("small");
+  method.textContent = data.method;
+  report.replaceChildren(metric, method);
+  if (data.comparison) {
+    const comparison = document.createElement("div");
+    comparison.textContent = data.comparison.label + ": " + format(data.comparison.value) +
+      " · Diferencia: " + format(data.comparison.difference, 4);
+    report.append(comparison);
+  }
+  for (const message of data.warnings) {
+    const warning = document.createElement("p");
+    warning.className = "bwjm-calculus-warning";
+    warning.textContent = message;
+    report.append(warning);
+  }
+}
+
+function updateTrajectoryReadout(
+  panel: HTMLElement, trajectoryNode: Extract<MathMDNode, { type: "trajectory" | "curve3d" }>,
+  vars: Readonly<Record<string, number>>, frameNode?: Extract<MathMDNode, { type: "frame" }>,
+): void {
+  const tVal = vars["t"] ?? (trajectoryNode.type === "curve3d" ? trajectoryNode.tDomain[0] : undefined) ?? 0;
+  const x = trajectoryNode.x ?? "cos(t)";
+  const y = trajectoryNode.y ?? "sin(t)";
+  const z = trajectoryNode.z ?? "0";
+  const kin = computeKinematics({ x, y, z }, tVal, vars);
+
+  const isStationary = kin.isStationary || kin.speed < 1e-7;
+  const crossMag = Math.sqrt(
+    (kin.tangent.y * kin.binormal.z - kin.tangent.z * kin.binormal.y)**2 +
+    (kin.tangent.z * kin.binormal.x - kin.tangent.x * kin.binormal.z)**2 +
+    (kin.tangent.x * kin.binormal.y - kin.tangent.y * kin.binormal.x)**2
+  );
+  const isDegenerate = crossMag < 1e-7;
+  const format = (value: number) => Number.isFinite(value) ? Number(value.toFixed(4)).toString() : "Indeterminado";
+  const classification = (type: string | undefined) => type === "symbolic" ? " · simbólica"
+    : type === "numerical" ? " · numérica" : "";
+  const metrics = [
+    ["Posición r(t)", "(" + [kin.position.x, kin.position.y, kin.position.z].map(format).join(", ") + ")"],
+    ["Rapidez |v(t)|", format(kin.speed)],
+    ["Aceleración tangencial", format(kin.tangentialAcceleration)],
+    ["Aceleración normal", format(kin.normalAcceleration)],
+    ["Curvatura κ", isStationary ? "Indeterminada" : format(kin.curvature) + classification(frameNode?.curvatureType)],
+    ["Torsión τ", isDegenerate ? "Indeterminada" : format(kin.torsion) + classification(frameNode?.torsionType)],
+    ["Radio osculador", isStationary || isDegenerate ? "Indeterminado" : format(kin.osculatingRadius)],
+  ];
+  panel.innerHTML = `
+    <div class="bwjm-trajectory-header">
+      <strong>Datos de la trayectoria</strong>
+      <span>t = ${format(tVal)}</span>
+    </div>
+    <dl class="bwjm-trajectory-values">
+      ${metrics.map(([label, value]) => "<div><dt>" + label + "</dt><dd>" + value + "</dd></div>").join("")}
+    </dl>
+  `;
+}
+
+function appendGraphSetting(table: HTMLTableSectionElement, name: string, control: HTMLInputElement | HTMLSelectElement,
+  output?: HTMLOutputElement) {
+  const row = table.insertRow();
+  const heading = document.createElement("th");
+  heading.scope = "row";
+  const label = document.createElement("label");
+  control.id = (table.parentElement?.id ?? "graph-settings") + "-" + row.rowIndex;
+  label.htmlFor = control.id;
+  label.textContent = name;
+  heading.append(label);
+  row.append(heading);
+  const value = row.insertCell();
+  if (output) {
+    const range = document.createElement("div");
+    range.className = "bwjm-graph-setting-range";
+    output.htmlFor.add(control.id);
+    range.append(control, output);
+    value.append(range);
+  } else value.append(control);
+}
+
+function appendGraphSettingGroup(table: HTMLTableSectionElement, title: string) {
+  const heading = document.createElement("th");
+  heading.colSpan = 2;
+  heading.className = "bwjm-graph-settings-group";
+  heading.textContent = title;
+  table.insertRow().append(heading);
+}
+
+function appendGraphColor(controls: HTMLTableSectionElement, name: string, value: string | undefined,
+  fallback: string, save: (color: string) => void): void {
+  const input = document.createElement("input");
+  input.type = "color";
+  input.value = value && /^#[\da-f]{6}$/i.test(value) ? value : fallback;
+  input.onchange = () => save(input.value);
+  appendGraphSetting(controls, name, input);
+}
 
 declare global {
   interface Window {
@@ -146,8 +255,6 @@ function renderMathToString(tex: string, displayMode: boolean): string {
   return `<span style="font-family: 'Cambria Math', KaTeX_Math, serif; font-style: italic; color: #0369a1; padding: 0 2px;">${cleaned}</span>`;
 }
 
-
-
 function renderTableBody(
   tbody: HTMLTableSectionElement,
   rows: ReadonlyArray<ReadonlyArray<string | number | boolean | null>>,
@@ -186,20 +293,17 @@ function renderStatisticsPanel(report: HTMLElement, data: any): void {
 
 const SAMPLE_LESSONS: Record<string, { title: string; filename: string; content: string }> = {
   riemann: {
-    title: "1. Área entre Curvas & Suma de Riemann",
+    title: "1. Área entre curvas y suma de Riemann",
     filename: "area_riemann.bwjm",
     content: `# Área entre curvas y suma de Riemann
 
-Consideramos fₐ(x) = a·x y g(x) = x², con a > 0. Las curvas se cruzan en
-(0, 0) y (a, a²); la región encerrada está en [0, a].
+Las curvas $f_a(x) = a\\cdot x$ y $g(x) = x^2$, con $a > 0$, se cruzan en $(0, 0)$ y $(a, a^2)$; la región encerrada está en $[0, a]$.
 
-El área analítica es A(a) = ∫₀ᵃ (a·x − x²) dx = a³/6.
-**Cuando a = 1**, el resultado particular es **1/6**; para otros
-valores de a, la referencia cambia junto con la región.
+$$
+A(a) = \\int_0^a (a\\cdot x - x^2)\\,dx = \\frac{a^3}{6}
+$$
 
-La suma de punto medio aproxima esta área usando n rectángulos. El valor
-de n determina solo la partición; el muestreo de las curvas se configura
-por separado con \`samples\` dentro de la escena.
+**Cuando $a = 1$**, el resultado particular es **1/6**; para otros valores de $a$, la referencia cambia junto con la región. La suma de punto medio aproxima esta área usando $n$ rectángulos.
 
 ## Parámetros de Riemann
 
@@ -379,76 +483,6 @@ function isCompactWorkspace(): boolean {
   return window.matchMedia(compactWorkspaceQuery).matches;
 }
 
-interface DocumentSegment {
-  kind: "prose" | "mathmd" | "diagnostic";
-  content?: string;
-  node?: MathMDNode;
-  diagnostic?: MathMDDiagnostic;
-}
-
-function parseDocumentSegments(
-  source: string,
-  docNodes: MathMDNode[],
-  diagnostics: MathMDDiagnostic[]
-): DocumentSegment[] {
-  type Span =
-    | { start: number; end: number; kind: "mathmd"; node: MathMDNode }
-    | { start: number; end: number; kind: "diagnostic"; diagnostic: MathMDDiagnostic };
-
-  const spans: Span[] = [];
-  for (const node of docNodes) {
-    spans.push({
-      start: node.range.start.offset,
-      end: node.range.end.offset,
-      kind: "mathmd",
-      node,
-    });
-  }
-  for (const diagnostic of diagnostics) {
-    if (diagnostic.range && diagnostic.blockType) {
-      spans.push({
-        start: diagnostic.range.start.offset,
-        end: diagnostic.range.end.offset,
-        kind: "diagnostic",
-        diagnostic,
-      });
-    }
-  }
-
-  spans.sort((a, b) => a.start - b.start || a.end - b.end);
-
-  const segments: DocumentSegment[] = [];
-  let cursor = 0;
-
-  for (const span of spans) {
-    if (span.start > cursor) {
-      const proseSlice = source.slice(cursor, span.start).trim();
-      if (proseSlice.length > 0) {
-        segments.push({ kind: "prose", content: proseSlice });
-      }
-    }
-    if (span.kind === "mathmd") {
-      segments.push({ kind: "mathmd", node: span.node });
-    } else if (span.kind === "diagnostic") {
-      segments.push({
-        kind: "diagnostic",
-        diagnostic: span.diagnostic,
-        content: source.slice(span.start, span.end),
-      });
-    }
-    cursor = Math.max(cursor, span.end);
-  }
-
-  if (cursor < source.length) {
-    const text = source.slice(cursor).trim();
-    if (text.length > 0) {
-      segments.push({ kind: "prose", content: text });
-    }
-  }
-
-  return segments;
-}
-
 function extractOutline(source: string): OutlineItem[] {
   const lines = source.split("\n");
   const items: OutlineItem[] = [];
@@ -474,214 +508,12 @@ function extractOutline(source: string): OutlineItem[] {
   return items;
 }
 
-function appendDisplayMath(container: HTMLElement, tex: string): void {
-  const formula = document.createElement("div");
-  formula.className = "math-display-box";
-  formula.tabIndex = 0;
-  formula.setAttribute("role", "region");
-  formula.setAttribute("aria-label", "Fórmula");
-  formula.innerHTML = renderMathToString(tex, true);
-  container.appendChild(formula);
-}
-
-/** Only HTTP(S), relative paths and document fragments may be navigation/media targets. */
-function safeMarkdownUrl(value: string | undefined): string | null {
-  if (!value || [...value].some(char => char.charCodeAt(0) < 32 || char.charCodeAt(0) === 127)) return null;
-  const target = value.trim();
-  if (!target || /^\/\//.test(target)) return null;
-  try {
-    const parsed = new URL(target, document.baseURI);
-    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.href : null;
-  } catch {
-    return null;
-  }
-}
-
-function appendInlineMath(container: HTMLElement, tex: string): void {
-  const span = document.createElement("span");
-  span.className = "bwjm-inline-math";
-  // This markup comes only from the trusted KaTeX renderer (or escaped fallback).
-  span.innerHTML = renderMathToString(tex, false);
-  container.appendChild(span);
-}
-
-/** Convert Remark nodes to safe DOM; never interpret user-provided HTML. */
-function appendMarkdownNode(parent: HTMLElement, node: MdastNode, source: string): void {
-  const children = (target: HTMLElement) => {
-    for (const child of node.children ?? []) appendMarkdownNode(target, child, source);
-  };
-  const element = (tag: string, className?: string): HTMLElement => {
-    const el = document.createElement(tag);
-    if (className) el.className = className;
-    parent.appendChild(el);
-    children(el);
-    return el;
-  };
-
-  switch (node.type) {
-    case "root":
-    case "listItem":
-    case "tableRow":
-    case "tableCell":
-      children(parent);
-      return;
-    case "definition":
-      return;
-    case "text":
-      parent.appendChild(document.createTextNode(node.value ?? ""));
-      return;
-    case "paragraph": {
-      // remark-math can represent standalone $$tex$$ as inlineMath.
-      const only = node.children?.length === 1 ? node.children[0] : undefined;
-      const raw = node.position
-        ? source.slice(node.position.start.offset, node.position.end.offset).trim()
-        : "";
-      if (only?.type === "inlineMath" && /^\$\$[\s\S]*\$\$$/.test(raw)) {
-        appendDisplayMath(parent, only.value ?? "");
-        return;
-      }
-      element("p");
-      return;
-    }
-    case "heading":
-      element("h" + Math.min(6, Math.max(1, node.depth ?? 1)));
-      return;
-    case "strong": element("strong"); return;
-    case "emphasis": element("em"); return;
-    case "delete": element("del"); return;
-    case "blockquote": element("blockquote", "markdown-callout"); return;
-    case "thematicBreak": parent.appendChild(document.createElement("hr")); return;
-    case "break": parent.appendChild(document.createElement("br")); return;
-    case "inlineCode": {
-      const code = document.createElement("code");
-      code.textContent = node.value ?? "";
-      parent.appendChild(code);
-      return;
-    }
-    case "code": {
-      const pre = document.createElement("pre");
-      const code = document.createElement("code");
-      code.textContent = node.value ?? "";
-      pre.appendChild(code);
-      parent.appendChild(pre);
-      return;
-    }
-    case "html":
-      parent.appendChild(document.createTextNode(node.value ?? ""));
-      return;
-    case "inlineMath":
-      appendInlineMath(parent, node.value ?? "");
-      return;
-    case "math":
-      appendDisplayMath(parent, node.value ?? "");
-      return;
-    case "link": {
-      const href = safeMarkdownUrl(node.url);
-      if (!href) { children(parent); return; }
-      const link = document.createElement("a");
-      link.href = href;
-      if (node.title) link.title = node.title;
-      children(link);
-      parent.appendChild(link);
-      return;
-    }
-    case "image": {
-      const wrapper = document.createElement("span");
-      wrapper.className = "bwjm-markdown-image";
-      const description = node.alt || "Imagen";
-      const src = node.url?.startsWith("data:")
-        ? (isSafeEmbeddedRasterUrl(node.url) ? node.url : null)
-        : safeMarkdownUrl(node.url);
-      if (src) {
-        const img = document.createElement("img");
-        img.alt = node.alt ?? "";
-        img.src = src;
-        img.loading = "lazy";
-        const error = document.createElement("span");
-        error.className = "bwjm-image-error";
-        error.setAttribute("role", "status");
-        error.hidden = true;
-        error.textContent = "No se pudo cargar la imagen: " + description;
-        img.addEventListener("error", () => {
-          img.hidden = true;
-          error.hidden = false;
-        });
-        wrapper.append(img, error);
-      } else {
-        const error = document.createElement("span");
-        error.className = "bwjm-image-error";
-        error.setAttribute("role", "status");
-        error.textContent = "No se pudo cargar la imagen: " + description;
-        wrapper.appendChild(error);
-      }
-      parent.appendChild(wrapper);
-      return;
-    }
-    case "list": {
-      const list = document.createElement(node.ordered ? "ol" : "ul");
-      if (node.ordered && typeof node.start === "number" && node.start !== 1) {
-        (list as HTMLOListElement).start = node.start;
-      }
-      for (const item of node.children ?? []) {
-        const li = document.createElement("li");
-        if (typeof item.checked === "boolean") {
-          const marker = document.createElement("input");
-          marker.type = "checkbox";
-          marker.disabled = true;
-          marker.checked = item.checked;
-          li.appendChild(marker);
-        }
-        for (const child of item.children ?? []) appendMarkdownNode(li, child, source);
-        list.appendChild(li);
-      }
-      parent.appendChild(list);
-      return;
-    }
-    case "table": {
-      const scroll = document.createElement("div");
-      scroll.className = "bwjm-markdown-table-scroll";
-      scroll.tabIndex = 0;
-      scroll.setAttribute("role", "region");
-      scroll.setAttribute("aria-label", "Tabla del documento, desplazamiento horizontal");
-      const table = document.createElement("table");
-      const rows = node.children ?? [];
-      for (const [rowIndex, row] of rows.entries()) {
-        const section = document.createElement(rowIndex === 0 ? "thead" : "tbody");
-        const tr = document.createElement("tr");
-        for (const [cellIndex, cell] of (row.children ?? []).entries()) {
-          const td = document.createElement(rowIndex === 0 ? "th" : "td");
-          if (rowIndex === 0) td.setAttribute("scope", "col");
-          const alignment = node.align?.[cellIndex];
-          if (alignment) td.style.textAlign = alignment;
-          for (const child of cell.children ?? []) appendMarkdownNode(td, child, source);
-          tr.appendChild(td);
-        }
-        section.appendChild(tr);
-        table.appendChild(section);
-      }
-      scroll.appendChild(table);
-      parent.appendChild(scroll);
-      return;
-    }
-    default:
-      children(parent);
-  }
-}
-
-function renderProseText(content: string, container: HTMLElement, definitions: string): void {
-  const root = parseProseMarkdown(content, definitions);
-  for (const node of root.children ?? []) {
-    // Definitions are metadata, not visible content.
-    if (node.type !== "definition") appendMarkdownNode(container, node, content);
-  }
-}
-
 export function BWJMStudio() {
   const {
     documents, activeId, markdown, filename, selectedTemplate, setMarkdown,
     openDocument, createDocument, selectDocument, closeDocument, markSaved, renameDocument,
     insertAtDocumentSnapshot,
-  } = useDocumentWorkspace(SAMPLE_LESSONS.riemann.filename, SAMPLE_LESSONS.riemann.content, "riemann");
+  } = useDocumentWorkspace("sin_titulo.bwjm", "");
   const compactWorkspace = useSyncExternalStore(subscribeToCompactWorkspace, isCompactWorkspace);
   const [desktopView, setDesktopView] = useState<ViewMode>("split");
   const [compactView, setCompactView] = useState<Exclude<ViewMode, "split">>("reader");
@@ -692,6 +524,26 @@ export function BWJMStudio() {
   // Appearance is a Studio preference, not a property of the scientific document.
   useEffect(() => { persistStudioTheme(theme); }, [theme]);
 
+  // Auto-persist draft when content changes (debounced via localStorage)
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      const currentDoc = documents.find(d => d.id === activeId);
+      if (currentDoc && markdown !== currentDoc.savedContent) {
+        persistDraft(filename, markdown);
+      }
+    }, 2000);
+    return () => clearTimeout(timeout);
+  }, [markdown, filename, activeId, documents]);
+
+  // Recovery: check for unsaved draft on startup
+  useEffect(() => {
+    const draft = getDraft(filename);
+    if (draft && draft !== markdown && draft.length > markdown.length * 0.1) {
+      if (window.confirm(`Se encontró un borrador guardado de "${filename}" que no ha sido guardado.\n¿Desea recuperarlo?`)) {
+        setMarkdown(draft);
+      }
+    }
+  }, []); // Run only once on mount
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
   const [isSidebarLeftOpen, setIsSidebarLeftOpen] = compactWorkspace
@@ -708,6 +560,7 @@ export function BWJMStudio() {
   };
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("outline");
   const [isRibbonCollapsed, setIsRibbonCollapsed] = useState(false);
+  const [imageTarget, setImageTarget] = useState<{ id: string; source: string; offset: number }>();
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState<boolean>(false);
   const [isChartModalOpen, setIsChartModalOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
@@ -724,7 +577,6 @@ export function BWJMStudio() {
   const svgRenderersRef = useRef<Map<string, SVGRenderer>>(new Map());
   const openGraphSettingsRef = useRef<Set<string>>(new Set());
   const openCrossProductStepsRef = useRef<Set<string>>(new Set());
-  const parameterEditorDisposersRef = useRef<Array<() => void>>([]);
   const playbackRef = useRef<InlinePlaybackController | null>(null);
   const liveAnalysisRef = useRef<(() => void) | null>(null);
   const riemannUpdateRef = useRef<(() => void) | null>(null);
@@ -746,7 +598,7 @@ export function BWJMStudio() {
   };
 
   const editorView = useMemo(() => compactImageEditor(markdown), [markdown]);
-  const doc = useMemo(() => parseMathMD(markdown), [markdown]);
+  const { document: doc, root: markdownRoot } = useMemo(() => parseMathMDWithMarkdown(markdown), [markdown]);
   const outline = useMemo(() => extractOutline(markdown), [markdown]);
   
   const timelines = useMemo(() => 
@@ -754,7 +606,8 @@ export function BWJMStudio() {
   [doc]);
 
   const wordCount = useMemo(() => {
-    const clean = markdown.replace(/[#*`>$~-]/g, " ").trim();
+    const clean = markdown.replace(/^\[bwjm-imagen-\d+\]: data:image\/[^\r\n]*/gim, "")
+      .replace(/[#*`>$~-]/g, " ").trim();
     return clean ? clean.split(/\s+/).length : 0;
   }, [markdown]);
 
@@ -768,8 +621,6 @@ export function BWJMStudio() {
   };
 
   const clearRenderers = () => {
-    parameterEditorDisposersRef.current.forEach(dispose => dispose());
-    parameterEditorDisposersRef.current = [];
     playbackRef.current?.dispose();
     playbackRef.current = null;
     plotlyRenderersRef.current.forEach((renderer) => renderer.destroy());
@@ -809,6 +660,7 @@ export function BWJMStudio() {
 
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (imageTarget) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
         e.preventDefault();
         searchRef.current?.focus();
@@ -833,12 +685,65 @@ export function BWJMStudio() {
 
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [filename, markdown]);
+  }, [filename, markdown, imageTarget]);
+
+  /**
+   * Generates a document manifest with current state for reproducible reopening.
+   */
+  function generateManifest(doc: { children: any[] }, core: MathMDCore): string {
+    const now = new Date().toISOString();
+    const manifest: any = {
+      manifestVersion: 1,
+      engineVersion: "0.1.0",
+      createdAt: now,
+      updatedAt: now,
+      initialConditions: {
+        graphParameters: {},
+        timelinePositions: {},
+      },
+    };
+
+    // Capture graph parameters
+    doc.children.forEach((node: any) => {
+      if ("paramControls" in node && node.paramControls?.enabled) {
+        const params = core.getGraphParameters(node.id);
+        if (Object.keys(params).length > 0) {
+          manifest.initialConditions.graphParameters[node.id] = params;
+        }
+      }
+      // Capture timeline positions
+      if (node.type === "timeline") {
+        const value = core.getVariable(node.name);
+        if (value !== undefined) {
+          manifest.initialConditions.timelinePositions[node.name] = value;
+        }
+      }
+    });
+
+    const yaml = `manifestVersion: ${manifest.manifestVersion}
+engineVersion: "${manifest.engineVersion}"
+createdAt: "${manifest.createdAt}"
+updatedAt: "${manifest.updatedAt}"
+initialConditions:
+  graphParameters: ${JSON.stringify(manifest.initialConditions.graphParameters, null, 2).replace(/\n/g, '\n  ')}
+  timelinePositions: ${JSON.stringify(manifest.initialConditions.timelinePositions, null, 2).replace(/\n/g, '\n  ')}
+`;
+
+    return `\`\`\`manifest\n${yaml}\`\`\`\n\n`;
+  }
 
   const handleSaveFile = () => {
-    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+    // Parse markdown to get document structure
+    const { document: mathmdDoc } = parseMathMDWithMarkdown(markdown);
+    // Create core instance with the parsed document to extract current state
+    const core = new MathMDCore(mathmdDoc);
+    
+    const manifestBlock = generateManifest(mathmdDoc, core);
+    const contentWithManifest = manifestBlock + markdown;
+    
+    const blob = new Blob([contentWithManifest], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
+    const a = window.document.createElement("a");
     a.href = url;
     a.download = filename;
     a.click();
@@ -853,6 +758,8 @@ export function BWJMStudio() {
     reader.onload = (event) => {
       const content = event.target?.result as string;
       openDocument(file.name, content);
+      // Clear any existing draft when loading a saved file
+      clearDraft(file.name);
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -939,6 +846,39 @@ export function BWJMStudio() {
 
   const handleNewDocument = () => createDocument();
 
+  function openImageDialog() {
+    const textarea = textareaRef.current;
+    const caret = textarea
+      ? editorView.toSourceOffset(Math.min(textarea.selectionEnd, editorView.text.length), "end")
+      : markdown.length;
+    const block = markdownRoot.children?.find(node => node.position &&
+      node.position.start.offset <= caret && caret <= node.position.end.offset);
+    const offset = block?.position && block.type !== "paragraph" ? block.position.end.offset : caret;
+    setImageTarget({ id: activeId, source: markdown, offset });
+  }
+
+  function insertImage({ dataUrl, alt, caption, width }: ImageInsertion): string | undefined {
+    if (!imageTarget || activeId !== imageTarget.id || markdown !== imageTarget.source) {
+      return "El documento cambió. Abre Insertar imagen de nuevo.";
+    }
+    const { content, cursor, identifier } = insertEmbeddedImage(markdown, imageTarget.offset, dataUrl, alt, caption, width);
+    const children = parseMarkdown(content).children ?? [];
+    const definition = children.some(node => node.type === "definition" && node.identifier === identifier);
+    const reference = children.some(node => node.type === "paragraph" && node.children?.some(child =>
+      child.type === "imageReference" && child.identifier === identifier));
+    if (!definition || !reference) return "Cierra el bloque de código o fórmula antes de insertar la imagen.";
+    setMarkdown(content);
+    setImageTarget(undefined);
+    setViewMode(compactWorkspace ? "reader" : "split");
+    if (!compactWorkspace) {
+      const visibleCursor = compactImageEditor(content).toVisibleOffset(cursor, "end");
+      window.requestAnimationFrame(() => {
+        textareaRef.current?.setSelectionRange(visibleCursor, visibleCursor);
+        textareaRef.current?.focus();
+      });
+    }
+  }
+
   const handleExportHtml = () => {
     const renderedBody = sheetRef.current ? sheetRef.current.innerHTML : "";
     const html = `<!DOCTYPE html>
@@ -947,8 +887,9 @@ export function BWJMStudio() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(filename)} • BWJM Document</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  
   <style>
+    ${markdownReaderStyles}
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0b1120; color: #0f172a; padding: 2rem; display: flex; justify-content: center; }
     .bwjm-sheet { box-sizing: border-box; background: #ffffff; max-width: 860px; width: 100%; min-width: 0; padding: clamp(1rem, 5vw, 3rem); border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
     h1 { font-size: 2rem; font-weight: 800; color: #0f172a; margin-bottom: 1.5rem; }
@@ -1041,10 +982,10 @@ export function BWJMStudio() {
         insertAtCursor("\n\n| Columna 1 | Columna 2 |\n|---|---|\n| Dato 1 | Dato 2 |\n\n");
         break;
       case "picture": pickLocalImage(); break;
-      case "equation": insertAtCursor("\n$\n\\int_0^1 f(x)\\,dx\n$\n"); break;
+      case "equation": insertAtCursor("\n\n$$\n\\int_0^1 f(x)\\,dx\n$$\n\n"); break;
       case "inline-math": insertAtCursor("$", "$"); break;
-      case "matrix": insertAtCursor("\n$\n\\begin{bmatrix}a & b \\\\ c & d\\end{bmatrix}\n$\n"); break;
-      case "integral": insertAtCursor("\\int_{a}^{b} f(x)\\,dx"); break;
+      case "matrix": insertAtCursor("\n\n$$\n\\begin{bmatrix}a & b \\\\ c & d\\end{bmatrix}\n$$\n\n"); break;
+      case "integral": insertAtCursor("$\\int_{a}^{b} f(x)\\,dx$"); break;
       case "slider": insertAtCursor("\n" + fence +
         "slider\nname: a\nmin: 0.1\nmax: 5\nstep: 0.1\ndefault: 1\n" + fence + "\n"); break;
       case "data-table":
@@ -1077,6 +1018,12 @@ export function BWJMStudio() {
       title: "Insertar tabla científica exportable",
       category: "Datos",
       action: () => insertAtCursor("\n\n```datatable\ncaption: Medición experimental\ncolumns: [Tiempo, Posición, Velocidad]\nunits: [s, m, m/s]\nrows:\n  - [0, 0, 0]\n  - [1, 1.5, 3]\n  - [2, 6, 6]\nprecision: 3\n```\n"),
+    },
+    {
+      id: "insert-image-modal",
+      title: "Insertar imagen con pie y ancho",
+      category: "Insertar",
+      action: openImageDialog,
     },
     {
       id: "insert-formula",
@@ -1233,7 +1180,8 @@ export function BWJMStudio() {
     const sheet = document.createElement("article");
     sheet.className = "bwjm-sheet";
 
-    const segments = parseDocumentSegments(markdown, doc.children, doc.diagnostics);
+    const mounts = new Map<string, HTMLElement>();
+    const rangeKey = (range: MathMDNode["range"]) => range.start.offset + ":" + range.end.offset;
     let inlinePlaybackMounted = false;
 
     const svgSizeHandlers = new Map<Element, (width: number) => void>();
@@ -1280,88 +1228,42 @@ export function BWJMStudio() {
       svgResizeObserver?.observe(mount);
     };
 
-    /** Recompute only the affected chart, not the editor or all other graphs. */
-    const refreshParameterizedGraph = (id: string): void => {
-      const engine = coreRef.current;
-      if (!engine) return;
-      const data = engine.getNodeData(id);
-      const svg = svgRenderersRef.current.get(id);
-      if (svg) svg.render(data);
-      const plotly = plotlyRenderersRef.current.get(id);
-      if (plotly) {
-        const scope = engine.getGraphScope(id);
-        const currentT = scope["t"] ?? data.tDomain?.[1] ?? data.tDomain?.[0];
-        const extra = data.type === "curve3d" ? {
-          particle: data.animated === true,
-          showVectors: data.animated === true && data.showVectors === true,
-          showTNB: data.animated === true && data.showTNB === true,
-          showLegend: data.showLegend === true,
-        } : {};
-        plotly.render({ ...data, scope, currentT, ...extra });
+    const curveReadouts: Array<[Extract<MathMDNode, { type: "curve3d" }>, HTMLElement]> = [];
+    for (const diagnostic of doc.diagnostics) {
+      if (!diagnostic.range || !diagnostic.blockType || diagnostic.severity !== "error") continue;
+      const key = rangeKey(diagnostic.range);
+      let diagnostics = mounts.get(key);
+      if (!diagnostics) {
+        diagnostics = document.createElement("div");
+        mounts.set(key, diagnostics);
       }
-      if (data.type === "vector2d" || data.type === "vector3d") {
-        const report = sheet.querySelector<HTMLElement>("#node-" + id + " .bwjm-vector-report");
-        if (report) updateVectorStudyReport(report, data);
-      }
-      if (data.type === "calculusviz") {
-        const report = sheet.querySelector<HTMLElement>("#node-" + id + " .bwjm-calculus-report");
-        if (report) {
-          const result = document.createElement("strong");
-          result.textContent = data.error ? "Error: " + data.error
-            : data.valueLabel + ": " + (Number.isFinite(data.value)
-              ? Number(data.value.toPrecision(8)) : "No determinado") +
-              (data.unit === "valor" ? "" : " " + data.unit);
-          report.replaceChildren(result);
-          if (!data.error) {
-            const method = document.createElement("small");
-            method.textContent = data.method + " · resultado numérico aproximado";
-            report.appendChild(method);
-            if (data.comparison) {
-              const second = document.createElement("div");
-              second.textContent = data.comparison.label + ": " +
-                Number(data.comparison.value.toPrecision(8)) +
-                " · Diferencia: " + Number(data.comparison.difference.toPrecision(4));
-              report.appendChild(second);
-            }
-            (data.warnings ?? []).forEach((message: string) => {
-              const line = document.createElement("p");
-              line.className = "bwjm-calculus-warning";
-              line.textContent = "⚠ " + message;
-              report.appendChild(line);
-            });
-          }
+      const box = document.createElement("div");
+      box.className = "bwjm-diagnostic-box";
+      box.innerHTML = `
+        <div class="bwjm-diagnostic-title">SINTAXIS INVÁLIDA [${escapeHtml(diagnostic.blockType)}]</div>
+        <div class="bwjm-diagnostic-msg">${escapeHtml(diagnostic.message)}</div>
+        <div class="bwjm-diagnostic-code">${escapeHtml(markdown.slice(diagnostic.range.start.offset, Math.min(diagnostic.range.end.offset, diagnostic.range.start.offset + 400)))}</div>
+      `;
+      diagnostics.append(box);
+    }
+    for (const node of doc.children) {
+        if (node.type === "timeline") {
+          mounts.set(rangeKey(node.range), document.createElement("span"));
+          continue;
         }
-      }
-    };
-
-    const markdownDefinitions = collectMarkdownDefinitions(markdown);
-    for (const segment of segments) {
-      if (segment.kind === "prose" && segment.content) {
-        const proseDiv = document.createElement("div");
-        proseDiv.className = "bwjm-prose-block";
-        renderProseText(segment.content, proseDiv, markdownDefinitions);
-        sheet.appendChild(proseDiv);
-      } else if (segment.kind === "diagnostic" && segment.diagnostic) {
-        const diagBox = document.createElement("div");
-        diagBox.className = "bwjm-diagnostic-box";
-        diagBox.innerHTML = `
-          <div class="bwjm-diagnostic-title">SINTAXIS INVÁLIDA [${escapeHtml(segment.diagnostic.blockType || "bloque")}]</div>
-          <div class="bwjm-diagnostic-msg">${escapeHtml(segment.diagnostic.message)}</div>
-          <div class="bwjm-diagnostic-code">${escapeHtml(segment.content || "")}</div>
-        `;
-        sheet.appendChild(diagBox);
-      } else if (segment.kind === "mathmd" && segment.node) {
-        const node = segment.node;
         const card = document.createElement("div");
         card.className = "bwjm-node-card";
         card.id = `node-${node.id}`;
 
         const cardHeader = document.createElement("div");
         cardHeader.className = "bwjm-node-header";
+        const graphLabel = node.type === "calculusviz"
+          ? node.mode === "riemann" ? "Área entre curvas" : "Áreas e integrales"
+          : node.type === "datachart" ? "Gráfica de datos" : graphLabels.get(node.type);
         cardHeader.innerHTML = `
           <span class="bwjm-node-tag">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
-            ${escapeHtml(node.type.toUpperCase())} • ${escapeHtml(node.id)}
+            <svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+            ${escapeHtml(graphLabel ?? (node.type.toUpperCase() + " • " + node.id))}
           </span>
         `;
         if (node.type === "plot2d" || node.type === "surface3d" || node.type === "curve3d" || node.type === "parametric2d") {
@@ -1399,19 +1301,19 @@ export function BWJMStudio() {
           ? createCrossProductDeterminant() : undefined;
 
         // Graph settings persist in the selected code fence, avoiding transient-only UI state.
-        if (supportsAdaptiveParameters(node) || node.type === "crossproduct" ||
+        if (supportsAdaptiveParameters(node) || node.type === "crossproduct" || node.type === "datachart" ||
           node.type === "line3d" || node.type === "plane3d" ||
           ((node.type === "vector2d" || node.type === "vector3d") && Boolean(node.mode))) {
-          const options: Array<[string, string]> = node.type === "curve3d" ? [
+          const options: Array<[string, string, string?]> = node.type === "curve3d" ? [
             ["animated", "Animar partícula"],
-            ["showVectors", "Vectores velocidad y aceleración"],
-            ["showTNB", "Triedro de Frenet (T, N, B)"],
-            ["showLegend", "Mostrar leyenda"],
-            ["showInfo", "Mostrar panel científico"],
+            ["showVectors", "Velocidad y aceleración"],
+            ["showTNB", "Triedro de Frenet"],
+            ["showLegend", "Leyenda"],
+            ["showInfo", "Datos de la trayectoria"],
           ] : node.type === "surface3d" ? [
-            ["contours", "Curvas de nivel / cotas"],
-            ["animated", "Animar (si la ecuación depende de t)"],
-            ["showInfo", "Mostrar ficha de ecuación y dominio"],
+            ["contours", "Curvas de nivel"],
+            ["animated", "Reproducir variación temporal"],
+            ["showInfo", "Mostrar dominio"],
           ] : node.type === "parametric2d" ? [
             ["animated", "Animar partícula"],
             ["showTrail", "Estela"],
@@ -1420,16 +1322,21 @@ export function BWJMStudio() {
             ["showTangent", "Tangente"],
             ["showNormal", "Normal"],
             ["followParticle", "Seguir partícula"],
+          ] : node.type === "flow2d" ? [
+            ["showVectors", "Flechas del campo"],
+            ["showParticles", "Animar partículas"],
+          ] : node.type === "plot2d" ? [
+            ["grid", "Cuadrícula"],
           ] : node.type === "crossproduct" ? [
-            ["showPlane", "Plano generado"],
+            ["showPlane", "Plano generado", "Geometría"],
             ["showNormal", "Normal orientada"],
             ["showArea", "Área del paralelogramo"],
             ["showTriangle", "Triángulo sombreado (1/2 |u×v|)"],
             ["showVolume", "Volumen paralelepípedo (u·(v×w))"],
-            ["showCollapse", "Animar colapso paralelepípedo"],
+            ["showCollapse", "Animar colapso del paralelepípedo", "Interacción"],
             ["showSignChallenge", "Desafío visual de signos"],
-            ["showSteps", "Mostrar procedimiento matemático"],
             ["reverseOrder", "Invertir orden"],
+            ["showSteps", "Mostrar procedimiento matemático", "Procedimiento"],
             ["showDeterminant", "Mostrar determinante i, j, k"],
             ["showRightHand", "Regla de la mano derecha"],
             ["showAnticommutative", "Superponer normal opuesta (anticonmutatividad)"],
@@ -1457,37 +1364,79 @@ export function BWJMStudio() {
           details.appendChild(summary);
           const controls = document.createElement("div");
           controls.className = "bwjm-graph-settings-controls";
-          options.forEach(([key, label]) => {
-            const wrapper = document.createElement("label");
+          const table = document.createElement("table");
+          table.className = "bwjm-graph-settings-table";
+          table.id = "settings-" + node.id;
+          table.setAttribute("aria-label", "Ajustes de la gráfica");
+          const settingsRows = table.createTBody();
+          const saveOption = (key: string, value: boolean | string) => {
+            openGraphSettingsRef.current.add(settingsKey);
+            setMarkdown(previous => {
+              const updated = updateGraphOption(previous, node.range, node.type, key, value);
+              if (updated === previous || value !== true || (key !== "animated" && key !== "showParticles")) return updated;
+              const hasTimeControl = doc.children.some(item =>
+                (item.type === "timeline" || item.type === "slider") && item.name === "t");
+              if (hasTimeControl || ("timelineRef" in node && node.timelineRef)) return updated;
+              const range = node.type === "curve3d" || node.type === "parametric2d" ? node.tDomain
+                : node.type === "flow2d" ? [0, node.tMax] : [0, 2 * Math.PI];
+              const fence = String.fromCharCode(96).repeat(3);
+              const newline = previous.includes("\r\n") ? "\r\n" : "\n";
+              return updated + ["", "", fence + "timeline", "name: t", "domain: [" + range.join(", ") + "]",
+                "default: " + range[0], "loop: true", fence, ""].join(newline);
+            });
+          };
+          options.forEach(([key, label, group]) => {
+            if (node.type === "surface3d" && key === "animated" && !/\bt\b/.test(node.equation)) return;
+            if (node.type === "curve3d" && !node.animated && (key === "showVectors" || key === "showTNB")) return;
+            if (node.type === "parametric2d" && node.animated === false && key !== "animated") return;
+            if (group) appendGraphSettingGroup(settingsRows, group);
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             const configured = (node as unknown as Record<string, unknown>)[key];
             const defaultOn = node.type === "crossproduct" ? ["showPlane", "showNormal", "showArea"].includes(key) :
-              key === "showSteps" || (key === "animated" && node.type === "parametric2d");
+              key === "showSteps" || (key === "animated" && node.type === "parametric2d") ||
+              (key === "showVectors" && node.type === "flow2d");
             checkbox.checked = typeof configured === "boolean" ? configured : defaultOn;
             checkbox.setAttribute("aria-label", label);
-            checkbox.onchange = () => {
-              if (node.type !== "curve3d" && node.type !== "surface3d" &&
-                node.type !== "parametric2d" && node.type !== "vector2d" &&
-                node.type !== "vector3d" && node.type !== "crossproduct" &&
-                node.type !== "line3d" && node.type !== "plane3d") return;
-              openGraphSettingsRef.current.add(settingsKey);
-              setMarkdown(previous => updateGraphOption(
-                previous, node.range, node.type, key, checkbox.checked));
-            };
-            wrapper.append(checkbox, document.createTextNode(label));
-            controls.appendChild(wrapper);
+            checkbox.onchange = () => saveOption(key, checkbox.checked);
+            appendGraphSetting(settingsRows, label, checkbox);
           });
+          if (node.type === "surface3d") {
+            const select = document.createElement("select");
+            select.append(new Option("Escala por altura", "height"), new Option("Color uniforme", "solid"));
+            select.value = node.color ? "solid" : "height";
+            select.onchange = () => {
+              if (select.value === "solid") saveOption("color", "#0284c7");
+              else {
+                openGraphSettingsRef.current.add(settingsKey);
+                setMarkdown(previous => resetSurfaceColor(previous, node.range));
+              }
+            };
+            appendGraphSetting(settingsRows, "Color de la superficie", select);
+            if (node.color) appendGraphColor(settingsRows, "Color uniforme", node.color, "#0284c7",
+              color => saveOption("color", color));
+            if (node.contours) appendGraphColor(settingsRows, "Color de las curvas de nivel", node.contourColor,
+              "#fbbf24", color => saveOption("contourColor", color));
+          } else if (node.type === "crossproduct") {
+            appendGraphSettingGroup(settingsRows, "Apariencia");
+            appendGraphColor(settingsRows, "Color del vector u", node.colorU, "#0284c7", color => saveOption("colorU", color));
+            if (node.showPlane !== false) {
+              appendGraphColor(settingsRows, "Color del plano", node.colorPlane, "#cbd5e1", color => saveOption("colorPlane", color));
+            }
+          } else if (node.type === "plot2d" || node.type === "curve3d" || node.type === "parametric2d" ||
+            node.type === "vectorfield2d" || node.type === "flow2d" || node.type === "datachart" || node.type === "calculusviz") {
+            const fallback = node.type === "flow2d" ? "#6366f1" : node.type === "calculusviz" ? "#a5b4fc" : "#0284c7";
+            appendGraphColor(settingsRows, node.type === "calculusviz" ? "Color de la región" : "Color",
+              node.color, fallback, color => saveOption("color", color));
+          }
+          if (settingsRows.rows.length) controls.append(table);
           details.addEventListener("toggle", () => {
             if (details.open) openGraphSettingsRef.current.add(settingsKey);
             else openGraphSettingsRef.current.delete(settingsKey);
           });
           // Slider para collapseFactor en crossproduct (animación de colapso T017)
           if (node.type === "crossproduct" && node.showCollapse) {
-            const collapseRow = document.createElement("label");
-            collapseRow.className = "bwjm-graph-collapse-factor";
-            const textLabel = document.createElement("span");
-            textLabel.textContent = "Factor de colapso";
+            appendGraphSettingGroup(settingsRows, "Colapso");
             const collapseRange = document.createElement("input");
             collapseRange.type = "range";
             collapseRange.min = "0";
@@ -1505,14 +1454,9 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "collapseFactor", Number(collapseRange.value)));
             };
-            collapseRow.append(textLabel, collapseRange, collapseValue);
-            controls.appendChild(collapseRow);
+            appendGraphSetting(settingsRows, "Factor de colapso", collapseRange, collapseValue);
             
             // Selector de objetivo de colapso (zero vs coplanar)
-            const targetRow = document.createElement("label");
-            targetRow.className = "bwjm-graph-collapse-target";
-            const targetLabel = document.createElement("span");
-            targetLabel.textContent = "Objetivo colapso";
             const targetSelect = document.createElement("select");
             targetSelect.setAttribute("aria-label", "Objetivo de colapso");
             const targetOptions = [
@@ -1531,16 +1475,12 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "collapseTarget", targetSelect.value));
             };
-            targetRow.append(targetLabel, targetSelect);
-            controls.appendChild(targetRow);
+            appendGraphSetting(settingsRows, "Objetivo de colapso", targetSelect);
           }
 
           // Selector de modo de desafío de signos (T019)
           if (node.type === "crossproduct" && node.showSignChallenge) {
-            const modeRow = document.createElement("label");
-            modeRow.className = "bwjm-graph-sign-challenge-mode";
-            const modeLabel = document.createElement("span");
-            modeLabel.textContent = "Modo desafío";
+            appendGraphSettingGroup(settingsRows, "Desafío de signos");
             const modeSelect = document.createElement("select");
             modeSelect.setAttribute("aria-label", "Modo de desafío de signos");
             const modeOptions = [
@@ -1560,14 +1500,9 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "signChallengeMode", modeSelect.value));
             };
-            modeRow.append(modeLabel, modeSelect);
-            controls.appendChild(modeRow);
+            appendGraphSetting(settingsRows, "Modo de desafío", modeSelect);
 
             // Seed input para modo aleatorio reproducible
-            const seedRow = document.createElement("label");
-            seedRow.className = "bwjm-graph-sign-challenge-seed";
-            const seedLabel = document.createElement("span");
-            seedLabel.textContent = "Semilla aleatoria";
             const seedInput = document.createElement("input");
             seedInput.type = "number";
             seedInput.min = "0";
@@ -1580,8 +1515,7 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "signChallengeSeed", Number(seedInput.value)));
             };
-            seedRow.append(seedLabel, seedInput);
-            controls.appendChild(seedRow);
+            appendGraphSetting(settingsRows, "Semilla aleatoria", seedInput);
           }
           if (node.type === "crossproduct") {
             controls.appendChild(createCrossProductEditor(node, {
@@ -1602,10 +1536,6 @@ export function BWJMStudio() {
           }
           // Selector de modo para plane3d (T031-T048)
           if (node.type === "plane3d") {
-            const modeRow = document.createElement("label");
-            modeRow.className = "bwjm-graph-plane3d-mode";
-            const modeLabel = document.createElement("span");
-            modeLabel.textContent = "Modo de plano";
             const modeSelect = document.createElement("select");
             modeSelect.setAttribute("aria-label", "Modo de definición del plano");
             const modeOptions = [
@@ -1627,8 +1557,7 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "mode", modeSelect.value));
             };
-            modeRow.append(modeLabel, modeSelect);
-            controls.appendChild(modeRow);
+            appendGraphSetting(settingsRows, "Definición del plano", modeSelect);
           }
 
           // Controles específicos para cada modo de plane3d
@@ -1638,13 +1567,9 @@ export function BWJMStudio() {
             if (mode === "point-normal") {
               // point + normal inputs
               const addVectorInput = (key: "point" | "normal", labelText: string, defaultVal: number[]) => {
-                const row = document.createElement("label");
-                row.className = `bwjm-graph-plane3d-${key}`;
-                const label = document.createElement("span");
-                label.textContent = labelText;
                 const input = document.createElement("input");
                 input.type = "text";
-                input.value = (node[key] ?? [0, 0, 0]).join(", ");
+                input.value = (node[key] ?? defaultVal).join(", ");
                 input.placeholder = "x, y, z";
                 input.setAttribute("aria-label", labelText);
                 input.onchange = () => {
@@ -1655,20 +1580,15 @@ export function BWJMStudio() {
                       previous, node.range, node.type, key, vals as [number, number, number]));
                   }
                 };
-                row.append(label, input);
-                controls.appendChild(row);
+                appendGraphSetting(settingsRows, labelText, input);
               };
               addVectorInput("point", "Punto P", [0, 0, 0]);
               addVectorInput("normal", "Normal n", [1, 1, 1]);
             } else if (mode === "three-points") {
               const addPointInput = (key: "pointA" | "pointB" | "pointC", labelText: string, defaultVal: number[]) => {
-                const row = document.createElement("label");
-                row.className = `bwjm-graph-plane3d-${key}`;
-                const label = document.createElement("span");
-                label.textContent = labelText;
                 const input = document.createElement("input");
                 input.type = "text";
-                input.value = (node[key] ?? [0, 0, 0]).join(", ");
+                input.value = (node[key] ?? defaultVal).join(", ");
                 input.placeholder = "x, y, z";
                 input.setAttribute("aria-label", labelText);
                 input.onchange = () => {
@@ -1679,21 +1599,16 @@ export function BWJMStudio() {
                       previous, node.range, node.type, key, vals as [number, number, number]));
                   }
                 };
-                row.append(label, input);
-                controls.appendChild(row);
+                appendGraphSetting(settingsRows, labelText, input);
               };
               addPointInput("pointA", "Punto A", [0, 0, 0]);
               addPointInput("pointB", "Punto B", [1, 0, 0]);
               addPointInput("pointC", "Punto C", [0, 1, 0]);
             } else if (mode === "point-vectors" || mode === "parametric") {
               const addVectorInput = (key: "point" | "vectorU" | "vectorV", labelText: string, defaultVal: number[]) => {
-                const row = document.createElement("label");
-                row.className = `bwjm-graph-plane3d-${key}`;
-                const label = document.createElement("span");
-                label.textContent = labelText;
                 const input = document.createElement("input");
                 input.type = "text";
-                input.value = (node[key] ?? [0, 0, 0]).join(", ");
+                input.value = (node[key] ?? defaultVal).join(", ");
                 input.placeholder = "x, y, z";
                 input.setAttribute("aria-label", labelText);
                 input.onchange = () => {
@@ -1704,18 +1619,13 @@ export function BWJMStudio() {
                       previous, node.range, node.type, key, vals as [number, number, number]));
                   }
                 };
-                row.append(label, input);
-                controls.appendChild(row);
+                appendGraphSetting(settingsRows, labelText, input);
               };
               addVectorInput("point", "Punto P", [0, 0, 0]);
               addVectorInput("vectorU", "Vector u", [1, 0, 0]);
               addVectorInput("vectorV", "Vector v", [0, 1, 0]);
             } else if (mode === "general") {
               const addCoeffInput = (key: "A" | "B" | "C" | "D", labelText: string, defaultVal: number) => {
-                const row = document.createElement("label");
-                row.className = `bwjm-graph-plane3d-${key.toLowerCase()}`;
-                const label = document.createElement("span");
-                label.textContent = labelText;
                 const input = document.createElement("input");
                 input.type = "number";
                 input.step = "0.1";
@@ -1726,8 +1636,7 @@ export function BWJMStudio() {
                   setMarkdown(previous => updateGraphOption(
                     previous, node.range, node.type, key, Number(input.value)));
                 };
-                row.append(label, input);
-                controls.appendChild(row);
+                appendGraphSetting(settingsRows, labelText, input);
               };
               addCoeffInput("A", "A", 1);
               addCoeffInput("B", "B", 0);
@@ -1738,10 +1647,6 @@ export function BWJMStudio() {
           // Controles numéricos para line3d (T021-T026)
           if (node.type === "line3d") {
             // tDomain min
-            const tMinRow = document.createElement("label");
-            tMinRow.className = "bwjm-graph-line3d-tmin";
-            const tMinLabel = document.createElement("span");
-            tMinLabel.textContent = "t mín";
             const tMinInput = document.createElement("input");
             tMinInput.type = "number";
             tMinInput.step = "0.1";
@@ -1753,14 +1658,9 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "tDomain", newTDomain));
             };
-            tMinRow.append(tMinLabel, tMinInput);
-            controls.appendChild(tMinRow);
+            appendGraphSetting(settingsRows, "t mínimo", tMinInput);
 
             // tDomain max
-            const tMaxRow = document.createElement("label");
-            tMaxRow.className = "bwjm-graph-line3d-tmax";
-            const tMaxLabel = document.createElement("span");
-            tMaxLabel.textContent = "t máx";
             const tMaxInput = document.createElement("input");
             tMaxInput.type = "number";
             tMaxInput.step = "0.1";
@@ -1772,14 +1672,9 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "tDomain", newTDomain));
             };
-            tMaxRow.append(tMaxLabel, tMaxInput);
-            controls.appendChild(tMaxRow);
+            appendGraphSetting(settingsRows, "t máximo", tMaxInput);
 
             // paramName
-            const paramRow = document.createElement("label");
-            paramRow.className = "bwjm-graph-line3d-param";
-            const paramLabel = document.createElement("span");
-            paramLabel.textContent = "Parámetro";
             const paramInput = document.createElement("input");
             paramInput.type = "text";
             paramInput.value = node.paramName ?? "t";
@@ -1790,17 +1685,12 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "paramName", paramInput.value));
             };
-            paramRow.append(paramLabel, paramInput);
-            controls.appendChild(paramRow);
+            appendGraphSetting(settingsRows, "Parámetro de la recta", paramInput);
           }
 
           // Controles numéricos para plane3d (T031-T034)
           if (node.type === "plane3d") {
             // xDomain min
-            const xMinRow = document.createElement("label");
-            xMinRow.className = "bwjm-graph-plane3d-xmin";
-            const xMinLabel = document.createElement("span");
-            xMinLabel.textContent = "x mín";
             const xMinInput = document.createElement("input");
             xMinInput.type = "number";
             xMinInput.step = "0.5";
@@ -1812,14 +1702,9 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "xDomain", newXDomain));
             };
-            xMinRow.append(xMinLabel, xMinInput);
-            controls.appendChild(xMinRow);
+            appendGraphSetting(settingsRows, "x mínimo", xMinInput);
 
             // xDomain max
-            const xMaxRow = document.createElement("label");
-            xMaxRow.className = "bwjm-graph-plane3d-xmax";
-            const xMaxLabel = document.createElement("span");
-            xMaxLabel.textContent = "x máx";
             const xMaxInput = document.createElement("input");
             xMaxInput.type = "number";
             xMaxInput.step = "0.5";
@@ -1831,14 +1716,9 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "xDomain", newXDomain));
             };
-            xMaxRow.append(xMaxLabel, xMaxInput);
-            controls.appendChild(xMaxRow);
+            appendGraphSetting(settingsRows, "x máximo", xMaxInput);
 
             // yDomain min
-            const yMinRow = document.createElement("label");
-            yMinRow.className = "bwjm-graph-plane3d-ymin";
-            const yMinLabel = document.createElement("span");
-            yMinLabel.textContent = "y mín";
             const yMinInput = document.createElement("input");
             yMinInput.type = "number";
             yMinInput.step = "0.5";
@@ -1850,14 +1730,9 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "yDomain", newYDomain));
             };
-            yMinRow.append(yMinLabel, yMinInput);
-            controls.appendChild(yMinRow);
+            appendGraphSetting(settingsRows, "y mínimo", yMinInput);
 
             // yDomain max
-            const yMaxRow = document.createElement("label");
-            yMaxRow.className = "bwjm-graph-plane3d-ymax";
-            const yMaxLabel = document.createElement("span");
-            yMaxLabel.textContent = "y máx";
             const yMaxInput = document.createElement("input");
             yMaxInput.type = "number";
             yMaxInput.step = "0.5";
@@ -1869,17 +1744,12 @@ export function BWJMStudio() {
               setMarkdown(previous => updateGraphOption(
                 previous, node.range, node.type, "yDomain", newYDomain));
             };
-            yMaxRow.append(yMaxLabel, yMaxInput);
-            controls.appendChild(yMaxRow);
+            appendGraphSetting(settingsRows, "y máximo", yMaxInput);
           }
 
           // A single source of truth: all curve layers and numeric preferences
           // are edited here and persisted in the selected .bwjm block.
           if (node.type === "parametric2d") {
-            const trailRow = document.createElement("label");
-            trailRow.className = "bwjm-graph-trail-length";
-            const textLabel = document.createElement("span");
-            textLabel.textContent = "Longitud de estela";
             const trailRange = document.createElement("input");
             trailRange.type = "range";
             trailRange.min = "2";
@@ -1897,34 +1767,7 @@ export function BWJMStudio() {
                 previous, node.range, "parametric2d", "trailLength",
                 Number(trailRange.value)));
             };
-            trailRow.append(textLabel, trailRange, trailValue);
-            controls.appendChild(trailRow);
-          }
-          if (supportsAdaptiveParameters(node)) {
-          const editor = createAdaptiveParameterEditor(node, {
-            save: config => {
-              openGraphSettingsRef.current.add(settingsKey);
-              setMarkdown(previous => writeGraphParameterControls(
-                previous, node.range, node.type, config));
-            },
-            current: name => coreRef.current?.getGraphParameters(node.id)[name],
-            update: (name, value) => {
-              if (coreRef.current?.setGraphParameter(node.id, name, value)) {
-                refreshParameterizedGraph(node.id);
-              }
-            },
-            updateMany: changes => {
-              const engine = coreRef.current;
-              if (!engine) return;
-              let changed = false;
-              changes.forEach(([name, value]) => {
-                changed = engine.setGraphParameter(node.id, name, value) || changed;
-              });
-              if (changed) refreshParameterizedGraph(node.id);
-            },
-          });
-          parameterEditorDisposersRef.current.push(editor.dispose);
-          controls.appendChild(editor.element);
+            appendGraphSetting(settingsRows, "Longitud de estela", trailRange, trailValue);
           }
           details.appendChild(controls);
           cardBody.appendChild(details);
@@ -2049,13 +1892,13 @@ export function BWJMStudio() {
             }
           };
 
-          const label = document.createElement("span");
-          label.style.fontWeight = "600";
-          label.style.color = "#0f172a";
-          label.textContent = `${sliderNode.name}:`;
+          const label = document.createElement("label");
+          label.htmlFor = "slider-" + sliderNode.id;
+          label.textContent = sliderNode.label ?? sliderNode.name;
 
           const rangeInput = document.createElement("input");
           rangeInput.type = "range";
+          rangeInput.id = label.htmlFor;
           rangeInput.min = String(sliderNode.min);
           rangeInput.max = String(sliderNode.max);
           rangeInput.step = String(sliderNode.step);
@@ -2072,7 +1915,9 @@ export function BWJMStudio() {
             handleVariableChange(sliderNode.name, val);
           };
 
-          row.appendChild(playBtn);
+          const isRiemannParameter = doc.children.some(graph => graph.type === "calculusviz" &&
+            graph.mode === "riemann" && (graph.partitions === sliderNode.name || graph.upperBound === sliderNode.name));
+          if (!isRiemannParameter) row.appendChild(playBtn);
           row.appendChild(label);
           row.appendChild(rangeInput);
           row.appendChild(valBadge);
@@ -2136,32 +1981,7 @@ export function BWJMStudio() {
           }
           const report = document.createElement("div");
           report.className = "bwjm-calculus-report";
-          if (data?.error) {
-            report.textContent = "Error: " + data.error;
-            report.classList.add("has-error");
-          } else {
-            const metric = document.createElement("strong");
-            const formatted = Number.isFinite(data.value) ? Number(data.value.toPrecision(8)) : "No determinado";
-            metric.textContent = data.valueLabel + ": " + formatted + " " +
-              (data.unit === "valor" ? "" : data.unit);
-            report.appendChild(metric);
-            const method = document.createElement("small");
-            method.textContent = data.method + " · resultado numérico aproximado";
-            report.appendChild(method);
-            if (data.comparison) {
-              const second = document.createElement("div");
-              second.textContent = data.comparison.label + ": " +
-                Number(data.comparison.value.toPrecision(8)) +
-                " · Diferencia: " + Number(data.comparison.difference.toPrecision(4));
-              report.appendChild(second);
-            }
-            (data.warnings ?? []).forEach((message:string) => {
-              const caution = document.createElement("p");
-              caution.className = "bwjm-calculus-warning";
-              caution.textContent = "⚠ " + message;
-              report.appendChild(caution);
-            });
-          }
+          updateCalculusReport(report, data);
           cardBody.appendChild(report);
           }
         } else if (node.type === "plot2d") {
@@ -2349,6 +2169,18 @@ export function BWJMStudio() {
 
         // The large global clock is removed. Insert one small transport alongside
         // the first animated graph; existing layer checkboxes remain unchanged.
+        if (node.type === "curve3d" && node.showInfo) {
+          const panel = document.createElement("div");
+          panel.className = "bwjm-live-analysis-panel bwjm-curve-readout";
+          cardBody.appendChild(panel);
+          curveReadouts.push([node, panel]);
+        }
+        if (node.type === "surface3d" && node.showInfo) {
+          const domain = document.createElement("p");
+          domain.className = "bwjm-graph-domain";
+          domain.textContent = "Dominio · x ∈ [" + node.xDomain.join(", ") + "], y ∈ [" + node.yDomain.join(", ") + "]";
+          cardBody.appendChild(domain);
+        }
         if (!inlinePlaybackMounted && timelines.length > 0 && supportsInlinePlayback(node)) {
           const transport = createInlinePlayback(
             timelines,
@@ -2384,17 +2216,31 @@ export function BWJMStudio() {
         }
         } catch (error) {
           // An unbound coefficient must not crash the whole scientific document.
-          // The user can activate its local slider in Personalizar gráfica.
           const warning = document.createElement("div");
           warning.className = "bwjm-graph-runtime-warning";
           const description = error instanceof Error ? error.message : String(error);
           warning.textContent = "No se pudo graficar: " + description +
             (supportsAdaptiveParameters(node)
-              ? ". Activa los parámetros interactivos para asignar coeficientes." : "");
+              ? ". Define los coeficientes al insertar la gráfica o con un parámetro del documento." : "");
           cardBody.appendChild(warning);
         }
         card.appendChild(cardBody);
-        sheet.appendChild(card);
+        const key = rangeKey(node.range);
+        const diagnostic = mounts.get(key);
+        if (diagnostic) diagnostic.append(card);
+        else mounts.set(key, card);
+    }
+
+    const renderMarkdown = createMarkdownReader(markdownRoot, renderMathToString, mounts, markdown);
+    for (const node of markdownRoot.children ?? []) {
+      const rendered = renderMarkdown(node);
+      if (!rendered) continue;
+      if (node.position && mounts.has(rangeKey(node.position))) sheet.append(rendered);
+      else {
+        const prose = document.createElement("div");
+        prose.className = "bwjm-prose-block";
+        prose.append(rendered);
+        sheet.append(prose);
       }
     }
 
@@ -2403,8 +2249,16 @@ export function BWJMStudio() {
     sheet.appendChild(livePanel);
 
     const updateLiveScientificAnalysis = () => {
+      const vars = coreRef.current?.getVariables() || {};
+      for (const [curve, panel] of curveReadouts) {
+        try {
+          updateTrajectoryReadout(panel, curve, coreRef.current?.getGraphScope(curve.id) ?? vars);
+        } catch (error) {
+          panel.textContent = error instanceof Error ? error.message : String(error);
+        }
+      }
       const hasVisualNodes = doc.children.some(node =>
-        ["curve3d", "trajectory", "surface3d", "field", "plot2d"].includes(node.type) &&
+        ["trajectory", "field", "plot2d"].includes(node.type) &&
         (node as unknown as { showInfo?: boolean }).showInfo === true
       );
       if (!hasVisualNodes) {
@@ -2413,79 +2267,16 @@ export function BWJMStudio() {
       }
       livePanel.style.display = "block";
 
-      const vars = coreRef.current?.getVariables() || {};
-
       const wantsInfo = (n: typeof doc.children[number]) =>
         (n as unknown as { showInfo?: boolean }).showInfo === true;
-      const trajectoryNode = doc.children.find(n => (n.type === "trajectory" || n.type === "curve3d") && wantsInfo(n));
+      const trajectoryNode = doc.children.find(n => n.type === "trajectory" && wantsInfo(n));
       const fieldNode = doc.children.find(n => (n.type === "vectorfield2d" || n.type === "field") && wantsInfo(n));
-      const surfaceNode = doc.children.find(n => n.type === "surface3d" && wantsInfo(n));
       const plot2dNodes = doc.children.filter(n => n.type === "plot2d" && wantsInfo(n));
       const regionNode = doc.children.find(n => n.type === "region");
       const frameNode = doc.children.find(n => n.type === "frame");
 
       if (trajectoryNode) {
-        const tVal = vars["t"] ?? (trajectoryNode as any).tDomain?.[0] ?? 0;
-        const x = (trajectoryNode as any).x ?? "cos(t)";
-        const y = (trajectoryNode as any).y ?? "sin(t)";
-        const z = (trajectoryNode as any).z ?? "0";
-        const kin = computeKinematics({ x, y, z }, tVal, vars);
-        
-        const isStationary = kin.isStationary || kin.speed < 1e-7;
-        const crossMag = Math.sqrt(
-          (kin.tangent.y * kin.binormal.z - kin.tangent.z * kin.binormal.y)**2 +
-          (kin.tangent.z * kin.binormal.x - kin.tangent.x * kin.binormal.z)**2 +
-          (kin.tangent.x * kin.binormal.y - kin.tangent.y * kin.binormal.x)**2
-        );
-        const isDegenerate = crossMag < 1e-7;
-        const curvatureType = isStationary ? "undefined" : (frameNode?.curvatureType ?? "numerical");
-        const torsionType = isDegenerate ? "undefined" : (frameNode?.torsionType ?? "numerical");
-        
-        livePanel.innerHTML = `
-          <div class="bwjm-panel-header">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            <strong>Motor Científico BWJM • Cinemática Espacial & Triedro Frenet-Serret</strong>
-          </div>
-          <div class="bwjm-panel-grid">
-            <div class="bwjm-panel-col">
-              <div class="bwjm-col-title">Posición & Velocidad (t = ${tVal.toFixed(2)})</div>
-              <div class="bwjm-metric-row">
-                <span>Posición r(t):</span>
-                <strong>(${kin.position.x.toFixed(3)}, ${kin.position.y.toFixed(3)}, ${kin.position.z.toFixed(3)})</strong>
-              </div>
-              <div class="bwjm-metric-row">
-                <span>Rapidez |v(t)|:</span>
-                <strong style="color: #0284c7;">${kin.speed.toFixed(4)} ${kin.speed !== kin.speed ? "" : "(numérica)"}</strong>
-              </div>
-            </div>
-            <div class="bwjm-panel-col">
-              <div class="bwjm-col-title">Descomposición de Aceleración</div>
-              <div class="bwjm-metric-row">
-                <span>Tangencial a_T:</span>
-                <strong style="color: #10b981;">${kin.tangentialAcceleration.toFixed(4)}</strong>
-              </div>
-              <div class="bwjm-metric-row">
-                <span>Normal a_N:</span>
-                <strong style="color: #f59e0b;">${kin.normalAcceleration.toFixed(4)}</strong>
-              </div>
-            </div>
-            <div class="bwjm-panel-col">
-              <div class="bwjm-col-title">Geometría Diferencial Intrínseca</div>
-              <div class="bwjm-metric-row">
-                <span>Curvatura κ:</span>
-                <strong style="color: #6366f1;">${kin.curvature.toFixed(4)} <span class="bwjm-math-type">[${curvatureType}]</span></strong>
-              </div>
-              <div class="bwjm-metric-row">
-                <span>Torsión τ:</span>
-                <strong style="color: #ec4899;">${kin.torsion.toFixed(4)} <span class="bwjm-math-type">[${torsionType}]</span></strong>
-              </div>
-              <div class="bwjm-metric-row">
-                <span>Radio osculador R:</span>
-                <strong>${isStationary || isDegenerate ? "∞ (indeterminado)" : kin.osculatingRadius.toFixed(4)}</strong>
-              </div>
-            </div>
-          </div>
-        `;
+        if (trajectoryNode.type === "trajectory") updateTrajectoryReadout(livePanel, trajectoryNode, vars, frameNode);
         return;
       }
 
@@ -2554,37 +2345,6 @@ export function BWJMStudio() {
           <div class="bwjm-panel-grid">
             ${fieldAnalysis}
             ${greensAnalysis}
-          </div>
-        `;
-        return;
-      }
-
-      if (surfaceNode) {
-        const equation = (surfaceNode as any).equation;
-        livePanel.innerHTML = `
-          <div class="bwjm-panel-header">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-            <strong>Motor Científico BWJM • Superficie 3D</strong>
-          </div>
-          <div class="bwjm-panel-grid">
-            <div class="bwjm-panel-col">
-              <div class="bwjm-col-title">Ecuación</div>
-              <div class="bwjm-metric-row">
-                <span>z =</span>
-                <strong>${escapeHtml(equation)}</strong>
-              </div>
-            </div>
-            <div class="bwjm-panel-col">
-              <div class="bwjm-col-title">Dominio</div>
-              <div class="bwjm-metric-row">
-                <span>x ∈</span>
-                <strong>[${(surfaceNode as any).xDomain[0]}, ${(surfaceNode as any).xDomain[1]}]</strong>
-              </div>
-              <div class="bwjm-metric-row">
-                <span>y ∈</span>
-                <strong>[${(surfaceNode as any).yDomain[0]}, ${(surfaceNode as any).yDomain[1]}]</strong>
-              </div>
-            </div>
           </div>
         `;
         return;
@@ -2700,6 +2460,11 @@ export function BWJMStudio() {
       if (nodeData.type === "vector2d" || nodeData.type === "vector3d") {
         const report = card?.querySelector(".bwjm-vector-report");
         if (report instanceof HTMLElement) updateVectorStudyReport(report, nodeData);
+      }
+
+      if (nodeData.type === "calculusviz") {
+        const report = card?.querySelector<HTMLElement>(".bwjm-calculus-report");
+        if (report) updateCalculusReport(report, nodeData);
       }
 
       const svgRenderer = svgRenderersRef.current.get(nodeId);
@@ -2849,6 +2614,13 @@ export function BWJMStudio() {
               value={editorView.text}
               onChange={(e) => setMarkdown(editorView.restoreSource(e.target.value))}
               aria-label="Editor del documento, imágenes embebidas con referencias cortas"
+              onKeyDown={event => {
+                if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
+                  event.key.toLowerCase() === "b") {
+                  event.preventDefault();
+                  if (!event.repeat) handleRibbonAction("bold");
+                }
+              }}
               spellCheck={false}
               autoCapitalize="off"
               autoComplete="off"
@@ -2868,6 +2640,8 @@ export function BWJMStudio() {
       </div>
 
 
+      {imageTarget && <ImageModal onClose={() => setImageTarget(undefined)} onInsert={insertImage} />}
+
       <FormulaModal
         isOpen={isFormulaModalOpen}
         onClose={() => setIsFormulaModalOpen(false)}
@@ -2876,6 +2650,8 @@ export function BWJMStudio() {
 
       <ChartModal
         isOpen={isChartModalOpen}
+        documentVariables={doc.children.flatMap(node =>
+          node.type === "slider" || node.type === "checkbox" || node.type === "timeline" ? [node.name] : [])}
         onClose={() => setIsChartModalOpen(false)}
         onInsert={(codeBlock: string) => insertAtCursor(codeBlock)}
       />

@@ -1,0 +1,28 @@
+{
+  "name": "@mathmd/katex",
+  "version": "0.1.0",
+  "description": "MathMD KaTeX local bundling - fonts, styles, and rendering API",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./fonts/*": "./dist/fonts/*",
+    "./styles.css": "./dist/katex.min.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc && node scripts/copy-assets.mjs",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "katex": "0.16.47"
+  },
+  "dependencies": {}
+}

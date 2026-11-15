@@ -1,12 +1,15 @@
 import { compileExpression, evaluateExpression } from "./mathEngine.js";
 import { computeRevolutionVolume } from "./solidRevolution.js";
+import { computeRiemannPartition } from "./regionRiemann.js";
 
 export type CalculusMode = "area-dx" | "area-dy" | "area-pieces" | "area-parametric" |
-  "area-polar" | "double-region" | "change-order" | "double-polar" | "revolution" | "green";
+  "area-polar" | "double-region" | "change-order" | "double-polar" | "revolution" | "green" | "riemann";
 
 export interface CalculusSpec {
   mode: CalculusMode;
   domain: [number, number];
+  partitions?: number | string;
+  upperBound?: string;
   f?: string; g?: string; integrand?: string;
   paramX?: string; paramY?: string;
   fieldP?: string; fieldQ?: string;
@@ -378,6 +381,37 @@ function green(spec:CalculusSpec,scope:Vars):CalculusVizResult{
   return out;
 }
 
+function riemannRegion(spec: CalculusSpec, scope: Vars): CalculusVizResult {
+  const [left, domainEnd] = spec.domain;
+  const right = spec.upperBound ? scope[spec.upperBound] : domainEnd;
+  if (!Number.isFinite(right) || right <= left || right > domainEnd) {
+    throw new Error("El límite superior debe estar dentro del dominio y superar al inferior.");
+  }
+  const requested = typeof spec.partitions === "string" ? scope[spec.partitions] : spec.partitions ?? 10;
+  if (!Number.isFinite(requested) || requested < 1 || requested > 500) {
+    throw new Error("Usa entre 1 y 500 particiones.");
+  }
+  const count = Math.round(requested);
+  const f = expression(spec.f, "f"), g = expression(spec.g, "g");
+  const xs = samplesBetween(left, domainEnd, spec.samples ?? 120);
+  const partition = computeRiemannPartition(spec.f!, spec.g!, [left, right], count, "midpoint", scope);
+  const out = result(partition.riemannSum, "Suma de Riemann", "u²",
+    `${count} rectángulos · Punto medio · Δx = ${partition.deltaX}`);
+  out.comparison = { label: "Área de referencia", value: partition.exactArea, difference: partition.error };
+  out.curves.push(
+    { points: xs.map(x => [x, axisEval(f, "x", x, scope)]), color: "#0284c7", label: "f(x)" },
+    { points: xs.map(x => [x, axisEval(g, "x", x, scope)]), color: "#ea580c", label: "g(x)" },
+  );
+  out.polygons = partition.rectangles.map(({ x0, x1, yBottom, yTop }) => ({
+    points: [[x0, yBottom], [x1, yBottom], [x1, yTop], [x0, yTop]],
+    fill: "#93c5fd",
+  }));
+  const y = axisEval(f, "x", right, scope);
+  const z = axisEval(g, "x", right, scope);
+  out.guides.push({ a: [right, Math.min(0, y, z)], b: [right, Math.max(0, y, z)], label: "Límite superior" });
+  return out;
+}
+
 export function computeCalculusViz(spec:CalculusSpec,scope:Vars={}):CalculusVizResult{
   if(!spec.domain||spec.domain[0]>=spec.domain[1])throw new Error("Dominio inválido");
   if(!Number.isFinite(spec.domain[0])||!Number.isFinite(spec.domain[1]))throw new Error("Dominio no finito");
@@ -390,6 +424,7 @@ export function computeCalculusViz(spec:CalculusSpec,scope:Vars={}):CalculusVizR
     case "double-polar":return polarRegion(spec,scope,true);
     case "revolution":return revolution(spec,scope);
     case "green":return green(spec,scope);
+    case "riemann":return riemannRegion(spec,scope);
     default:throw new Error("Modo de cálculo no implementado");
   }
 }

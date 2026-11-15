@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { ThemePicker } from "./ThemePicker.js";
 import type { StudioThemeId } from "./studioThemes.js";
 import { IconAtom, IconBarChart, IconBookOpen, IconChevronDown, IconCode,
-  IconColumns, IconDownload, IconFileText, IconFolderOpen, IconFunction,
-  IconLayers, IconList, IconSearch, IconSidebar, IconSliders } from "./icons.js";
+  IconColumns, IconDownload, IconEquation, IconFileText, IconFolderOpen, IconFunction,
+  IconInlineMath, IconIntegral, IconLayers, IconList, IconMatrix, IconSearch, IconSidebar,
+  IconSliders } from "./icons.js";
 
 export type RibbonTab = "Archivo" | "Inicio" | "Insertar" | "Matemáticas" | "Datos" | "Vista";
 export type RibbonAction =
@@ -18,7 +19,8 @@ interface ActionSpec {
   id: RibbonAction;
   label: string;
   hint?: string;
-  icon?: "file"|"folder"|"save"|"graph"|"formula"|"code"|"book"|"columns"|"layers"|"list"|"slider"|"search"|"sidebar"|"atom";
+  icon?: "file"|"folder"|"save"|"graph"|"formula"|"code"|"book"|"columns"|"layers"|"list"|"slider"|"search"|"sidebar"|"atom"
+    | "equation" | "inline-math" | "matrix" | "integral";
 }
 interface RibbonGroup { label: string; actions: readonly ActionSpec[] }
 const item = (id: RibbonAction, label: string, icon?: ActionSpec["icon"], hint?: string): ActionSpec => ({id,label,icon,hint});
@@ -29,7 +31,7 @@ export const RIBBON_GROUPS: Record<RibbonTab, readonly RibbonGroup[]> = {
     item("export-html","Exportar HTML","file")]}],
   Inicio: [
     {label:"Estilos",actions:[item("h1","Título 1"),item("h2","Título 2"),item("h3","Título 3")]},
-    {label:"Formato",actions:[item("bold","Negrita"),item("italic","Cursiva"),
+    {label:"Formato",actions:[item("bold","Negrita",undefined,"Ctrl+B"),item("italic","Cursiva"),
       item("code","Código","code"),item("quote","Cita"),item("list","Lista","list"),item("rule","Separador")]},
   ],
   Insertar: [
@@ -38,9 +40,9 @@ export const RIBBON_GROUPS: Record<RibbonTab, readonly RibbonGroup[]> = {
     {label:"Gráficos",actions:[item("graph","Gráficos y superficies","graph")]},
   ],
   Matemáticas: [
-    {label:"Notación",actions:[item("equation","Ecuación","formula"),
-      item("inline-math","Fórmula en línea","formula"),item("matrix","Matriz"),
-      item("integral","Integral")]},
+    {label:"Notación",actions:[item("equation","Ecuación","equation"),
+      item("inline-math","Fórmula en línea","inline-math"),item("matrix","Matriz","matrix"),
+      item("integral","Integral","integral")]},
     {label:"Interactividad",actions:[item("slider","Parámetro","slider")]},
   ],
   Datos: [
@@ -62,6 +64,8 @@ const icons = {
   book: IconBookOpen, columns: IconColumns, layers: IconLayers,
   list: IconList, slider: IconSliders, search: IconSearch,
   sidebar: IconSidebar, atom: IconAtom,
+  equation: IconEquation, "inline-math": IconInlineMath,
+  matrix: IconMatrix, integral: IconIntegral,
 };
 interface Props {
   onAction: (id: RibbonAction) => void;

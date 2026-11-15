@@ -94,7 +94,7 @@ export function closeWorkspaceDocument(workspace: WorkspaceState, id: string): W
   const index = workspace.documents.findIndex(document => document.id === id);
   if (index < 0) return workspace;
   const remaining = workspace.documents.filter(document => document.id !== id);
-  if (remaining.length === 0) return initialWorkspace("sin_titulo.bwjm", "# Nuevo documento\n\n");
+  if (remaining.length === 0) return initialWorkspace("sin_titulo.bwjm", "");
   return {
     documents: remaining,
     activeId: workspace.activeId === id ? remaining[Math.min(index, remaining.length - 1)].id : workspace.activeId,
@@ -107,6 +107,30 @@ export function markDocumentSaved(workspace: WorkspaceState): WorkspaceState {
       document.id === workspace.activeId ? { ...document, savedContent: document.content } : document),
   };
 }
+
+/** Persist current document content as a draft in localStorage */
+export function persistDraft(filename: string, content: string) {
+  try {
+    localStorage.setItem(`bwjm-draft-${filename}`, content);
+  } catch { /* Ignore storage errors */ }
+}
+
+/** Get the last persisted draft for a filename */
+export function getDraft(filename: string): string | null {
+  try {
+    return localStorage.getItem(`bwjm-draft-${filename}`);
+  } catch {
+    return null;
+  }
+}
+
+/** Remove draft persistence for a filename */
+export function clearDraft(filename: string) {
+  try {
+    localStorage.removeItem(`bwjm-draft-${filename}`);
+  } catch { /* Ignore storage errors */ }
+}
+
 export function useDocumentWorkspace(filename: string, content: string, lessonKey: string | null = null) {
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => initialWorkspace(filename, content, lessonKey));
   const workspaceRef = useRef(workspace);
@@ -128,8 +152,7 @@ export function useDocumentWorkspace(filename: string, content: string, lessonKe
     setWorkspace(previous => openWorkspaceDocument(previous, name, text, lesson));
   }, []);
   const createDocument = useCallback(() => {
-    setWorkspace(previous => openWorkspaceDocument(previous, "sin_titulo.bwjm",
-      "# Nuevo documento BWJM\n\nComienza a escribir texto, fórmulas y gráficas matemáticas.\n"));
+    setWorkspace(previous => openWorkspaceDocument(previous, "sin_titulo.bwjm", ""));
   }, []);
   const selectDocument = useCallback((id: string) => {
     setWorkspace(previous => previous.documents.some(document => document.id === id)

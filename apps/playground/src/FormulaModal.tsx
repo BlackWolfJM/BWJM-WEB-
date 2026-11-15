@@ -45,25 +45,18 @@ export const FormulaModal: React.FC<FormulaModalProps> = ({ isOpen, onClose, onI
 
   useEffect(() => {
     if (!isOpen) return;
-    if (typeof window !== "undefined" && window.katex) {
-      try {
-        const rendered = window.katex.renderToString(latex.trim() || "\\text{...}", {
-          displayMode: mode !== "inline",
-          throwOnError: true,
-        });
-        setPreviewHtml(rendered);
-        setHasError(false);
-      } catch {
-        setHasError(true);
-        setPreviewHtml(`<span class="bwjm-modal-error">Error de sintaxis LaTeX</span>`);
-      }
-    } else {
-      setPreviewHtml(`<code>${latex}</code>`);
+    try {
+      const rendered = window.katex.renderToString(latex.trim() || "\\text{...}", {
+        displayMode: mode !== "inline",
+        throwOnError: true,
+      });
+      setPreviewHtml(rendered);
       setHasError(false);
+    } catch {
+      setHasError(true);
+      setPreviewHtml(`<span class="bwjm-modal-error">Error de sintaxis LaTeX</span>`);
     }
   }, [latex, mode, isOpen]);
-
-  if (!isOpen) return null;
 
   const handleApplyTemplate = (snippet: string) => {
     setLatex((prev) => (prev.trim().length === 0 ? snippet : `${prev} ${snippet}`));
@@ -94,6 +87,8 @@ export const FormulaModal: React.FC<FormulaModalProps> = ({ isOpen, onClose, onI
       handleConfirm();
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="bwjm-modal-overlay" onClick={onClose} onKeyDown={handleKeyDown}>

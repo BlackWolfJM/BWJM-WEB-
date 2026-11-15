@@ -138,8 +138,7 @@ $V = \mathbf{u} \cdot (\mathbf{v} \times \mathbf{w}) = \det(\mathbf{u}, \mathbf{
 - $V > 0$: triedro **dextrógiro** (mano derecha)
 - $V < 0$: triedro **latrógiro** (mano izquierda)
 - $V = 0$: vectores **coplanares** (paralelepípedo colapsado)
-El renderizado 3D muestra las caras del paralelepípedo y una etiqueta con el
-volumen geométrico y el signo de su orientación. El color del sombreado se controla con `colorVolume: "#8b5cf6"` (por defecto).
+El renderizado 3D dibuja el paralelepípedo con sus 3 caras visibles (base y 2 laterales) y muestra la etiqueta del volumen en el centroide indicando su valor firmado y el signo de su orientación. El color del sombreado se controla con `colorVolume: "#8b5cf6"` (por defecto).
 El procedimiento didáctico desglosa la fórmula, el cálculo exacto del determinante y
 las permutaciones cíclicas que conservan el volumen.
 
@@ -164,7 +163,7 @@ precisión de coma flotante. El procedimiento explica la interpretación geomét
 - `collapseFactor ∈ [0, 1]`: interpola `w` hacia su proyección coplanar (`coplanar`) o hacia cero (`zero`)
 - `collapseTarget: "coplanar"` interpola la componente perpendicular al plano $u,v$ hacia cero
 - `collapseTarget: "zero"` interpola $w \to \mathbf{0}$
-- El deslizador `collapseFactor` (0–100 %) actualiza el volumen al confirmar el cambio
+- El deslizador `collapseFactor` (0–100 %) actualiza el volumen en tiempo real
 - Al factor = 1: **⚠ PARELEPÍPEDO COLAPSADO: Volumen = 0 (coplanar)**
 - El procedimiento didáctico desglosa la interpolación y el volumen en cada paso
 
@@ -271,3 +270,40 @@ de sliders declarados. No se admiten expresiones arbitrarias como factores.
 La salida es numérica y las comprobaciones de propiedades no sustituyen
 demostraciones generales. Consulta
 [`docs/LOTE_01_VECTORES_DOCUMENTOS.md`](docs/LOTE_01_VECTORES_DOCUMENTOS.md).
+
+### Apariencia de una superficie
+
+En `surface3d`, omite `color` para usar la escala por altura o escribe un color
+uniforme como `"#0284c7"`. Con `contours: true`, `contourColor` permite elegir
+un color hexadecimal de seis dígitos para las curvas de nivel.
+
+### Suma de Riemann
+
+El modo `riemann` de `calculusviz` dibuja rectángulos de punto medio entre
+`f` y `g`. `partitions` acepta un entero entre 1 y 500 o el nombre de un
+parámetro del documento. `upperBound` acepta un parámetro que cambia el límite
+derecho de integración dentro de `domain`. Si se omite, se usa el extremo
+derecho de `domain`.
+
+```calculusviz
+mode: riemann
+f: x
+g: x^2
+domain: [0, 1]
+partitions: 10
+```
+
+### Límites de las curvas paramétricas
+
+`curve3d`, `parametric2d` y `timeline` aceptan límites numéricos o
+múltiplos de π. Por ejemplo, `tDomain: [-π/2, 2pi]` y
+`tDomain: [0, 2*pi]` son válidos. El límite final debe ser mayor que el inicial.
+
+### Imágenes autocontenidas en Studio
+
+**Insertar → Imagen** incluye PNG, JPEG, GIF y WebP de hasta 5 MB. El documento
+guarda los bytes como una referencia Markdown de imagen y el lector la resuelve
+sin acceder al archivo original. El texto alternativo se escribe en la referencia.
+El título de la definición actúa como pie si la imagen aparece sola en su párrafo.
+El fragmento opcional `#width=320` fija el ancho en píxeles, con ajuste al ancho
+disponible. Un ejemplo está en [lector e imagen autocontenida](examples/lector-imagen-autocontenida.bwjm).

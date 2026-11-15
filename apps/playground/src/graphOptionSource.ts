@@ -3,7 +3,11 @@ import { parseMathMD } from "@mathmd/parser";
 
 type GraphOptionValue = boolean | number | string | readonly number[];
 
-type SupportedBlock = "curve3d" | "surface3d" | "parametric2d" | "vector2d" | "vector3d" | "crossproduct" | "line3d" | "plane3d";
+type SupportedBlock = "curve3d" | "surface3d" | "parametric2d" | "vector2d" | "vector3d" |
+  "crossproduct" | "line3d" | "plane3d" | "plot2d" | "vectorfield2d" | "flow2d" | "datachart" | "calculusviz";
+const colorBlocks = new Set<SupportedBlock>([
+  "plot2d", "surface3d", "curve3d", "parametric2d", "vectorfield2d", "flow2d", "datachart", "calculusviz",
+]);
 const crossProductOptions = new Set([
   "showPlane", "showNormal", "showArea", "showTriangle", "showVolume", "showSteps",
   "reverseOrder", "showDeterminant", "showRightHand",
@@ -31,6 +35,7 @@ const allowedBooleanSettings = new Set([
   "animated", "showInfo", "showLegend", "showTNB", "showVectors",
   "contours", "showTrail", "showVelocity", "showAcceleration",
   "showTangent", "showNormal", "followParticle", "showSteps", "showPlane", "showArea",
+  "grid", "showParticles",
 ]);
 
 /**
@@ -42,7 +47,7 @@ function updateGraphField(
   range: SourceRange,
   blockType: SupportedBlock,
   key: string,
-  value: GraphOptionValue,
+  value: GraphOptionValue | undefined,
 ): string {
   const { start, end } = range;
   if (!Number.isInteger(start.offset) || !Number.isInteger(end.offset) ||
@@ -57,6 +62,11 @@ function updateGraphField(
   for (let i = 1; i < lines.length - 1; i++) if (setting.test(lines[i])) matching.push(i);
   if (matching.length > 1) return source;
   const next = [...lines];
+  if (value === undefined) {
+    if (!matching.length) return source;
+    next.splice(matching[0], 1);
+    return source.slice(0, start.offset) + next.join(newline) + source.slice(end.offset);
+  }
   const entry = key + ": " + JSON.stringify(value);
   if (matching.length) {
     const index = matching[0];
@@ -85,6 +95,12 @@ export function updateGraphOption(
   key: string,
   value: GraphOptionValue,
 ): string {
+  if ((colorBlocks.has(blockType) && key === "color") ||
+    (blockType === "crossproduct" && (key === "colorU" || key === "colorPlane")) ||
+    (blockType === "surface3d" && key === "contourColor")) {
+    if (typeof value !== "string" || !/^#[\da-f]{6}$/i.test(value)) return source;
+    return updateGraphField(source, range, blockType, key, value);
+  }
   if (blockType === "crossproduct") {
     if (!crossProductOptions.has(key)) return source;
     const updated = updateGraphField(source, range, blockType, key, value);
@@ -116,6 +132,13 @@ export function updateGraphOption(
   if ((vector && key !== "showSteps") || (!vector && key === "showSteps"))
     return source;
   return updateGraphField(source, range, blockType, key, value);
+}
+
+export function resetSurfaceColor(source: string, range: SourceRange): string {
+  const updated = updateGraphField(source, range, "surface3d", "color", undefined);
+  const end = range.end.offset + updated.length - source.length;
+  return updated !== source && parseMathMD(updated.slice(range.start.offset, end)).children[0]?.type === "surface3d"
+    ? updated : source;
 }
 
 export function updateCrossProductVector(

@@ -14,6 +14,7 @@ artifacts/
 .agent/
 .agents/
 .ai/
+.codex/
 .hermes/
 .vscode/
 agency-agents/
@@ -40,6 +41,18 @@ BWJM_200_*.md
 ESTADO_IMPLEMENTACION_*.md
 MEJORAS_BWJM.md
 REVISION_*.md
+BWJM_Kit_*.zip
+BWJM_Todas_las_Tareas_*.md
+BWJM_200_*.md
+agency-agents-clone.txt
+
+# Local planning kits and prompts
+/PROMPT_*.md
+/BWJM_Kit_*/
+/BWJM_Kit_*.zip
+/BWJM_Todas_las_Tareas_*.md
+/docs/requirements/
+/docs/INVENTARIO_HERRAMIENTAS_*.md
 
 # Local planning kits and prompts
 /PROMPT_*.md
@@ -59,3 +72,4 @@ acl-recovery/
 # OS files
 .DS_Store
 Thumbs.db
+/estructura.txt

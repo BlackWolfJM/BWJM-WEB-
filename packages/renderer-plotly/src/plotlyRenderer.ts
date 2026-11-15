@@ -261,7 +261,7 @@ export class PlotlyRenderer {
       colorscale:[[0,color],[1,color]], showscale:false, opacity, name,
       hovertemplate:"x: %{x:.3f}<br>y: %{y:.3f}<br>z: %{z:.3f}<extra></extra>",
     });
-    this.data = [trace(node.mesh,"#6366f1","Superficie exterior",0.84)];
+    this.data = [trace(node.mesh,node.color ?? "#6366f1","Superficie exterior",0.84)];
     if (node.innerMesh) this.data.push(trace(node.innerMesh,"#38bdf8","Superficie interior",0.48));
     this.layout.title={text:"Sólido de revolución ("+(node.method??"washers")+")",x:0.5};
     this.layout.scene.aspectmode="data";
@@ -2208,9 +2208,11 @@ export class PlotlyRenderer {
     yDomain: [number, number]; 
     samples?: number; 
     contours?: boolean; 
+    contourColor?: string;
     color?: string;
   }>): void {
-    const { equation, xDomain, yDomain, samples = 50, contours = false, color } = node;
+    const { equation, xDomain, yDomain, samples = 50, contours = false, color,
+      contourColor = "#fbbf24" } = node;
     const { showscale = false, colorscale, reversescale = false, opacity } = node as any;
     
     try {
@@ -2234,9 +2236,7 @@ export class PlotlyRenderer {
         reversescale: reversescale,
         opacity: opacity,
         contours: contours ? {
-          x: { show: true, usemap: true, color: "gold", width: 2 },
-          y: { show: true, usemap: true, color: "gold", width: 2 },
-          z: { show: true, usemap: true, color: "gold", width: 2 }
+          z: { show: true, usemap: false, color: contourColor, width: 2 }
         } : undefined
       };
       

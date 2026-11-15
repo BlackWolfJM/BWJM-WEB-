@@ -1,0 +1,361 @@
+# Plano punto-normal (T031 - MED-04.06-V)
+
+Plano definido por un punto $P_0$ y un vector normal $\mathbf{n}$.
+La ecuación es $\mathbf{n} \cdot (\mathbf{X} - \mathbf{P}_0) = 0$.
+
+```plane3d
+id: plane3d-point-normal
+mode: point-normal
+point: [1, 2, 3]
+normal: [2, -1, 1]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+showIntercepts: true
+xDomain: [-5, 5]
+yDomain: [-5, 5]
+color: "#6366f1"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano punto-normal
+labelPoint: P₀
+labelNormal: n
+```
+
+La ecuación general es $2x - y + z - 3 = 0$. Los interceptos son $x = 1.5$, $y = -3$, $z = 3$.
+
+---
+
+## Plano ecuación general (T033 - MED-04.07-V)
+
+Plano definido por la ecuación general $Ax + By + Cz + D = 0$.
+
+```plane3d
+id: plane3d-general
+mode: general
+A: 2
+B: -1
+C: 1
+D: -3
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+showIntercepts: true
+xDomain: [-5, 5]
+yDomain: [-5, 5]
+color: "#8b5cf6"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano ecuación general
+labelPoint: P₀
+labelNormal: n
+```
+
+Equivale al plano $2x - y + z = 3$ con interceptos $x = 1.5$, $y = -3$, $z = 3$.
+
+---
+
+## Plano 3 puntos (T035 - MED-04.08-V)
+
+Plano definido por tres puntos no colineales $A$, $B$, $C$.
+La normal es $\mathbf{n} = (\mathbf{B} - \mathbf{A}) \times (\mathbf{C} - \mathbf{A})$.
+
+```plane3d
+id: plane3d-three-points
+mode: three-points
+pointA: [1, 0, 0]
+pointB: [0, 2, 0]
+pointC: [0, 0, 3]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+showIntercepts: true
+xDomain: [-2, 4]
+yDomain: [-2, 4]
+color: "#ec4899"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano 3 puntos
+labelPoint: A
+labelNormal: n = AB × AC
+```
+
+Los puntos $A(1,0,0)$, $B(0,2,0)$, $C(0,0,3)$ definen el plano $\frac{x}{1} + \frac{y}{2} + \frac{z}{3} = 1$ o $6x + 3y + 2z = 6$.
+
+---
+
+## Plano punto + 2 vectores (T037 - MED-04.09-V)
+
+Plano definido por un punto $P$ y dos vectores generadores $\mathbf{u}$, $\mathbf{v}$.
+La normal es $\mathbf{n} = \mathbf{u} \times \mathbf{v}$.
+Ecuación paramétrica: $\mathbf{X} = \mathbf{P} + s\mathbf{u} + t\mathbf{v}$.
+
+```plane3d
+id: plane3d-point-vectors
+mode: point-vectors
+point: [1, 1, 1]
+vectorU: [2, 0, 0]
+vectorV: [0, 2, 0]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+showIntercepts: true
+xDomain: [-2, 4]
+yDomain: [-2, 4]
+color: "#14b8a6"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano P + u, v
+labelPoint: P
+labelU: u
+labelV: v
+labelNormal: n = u × v
+```
+
+Plano horizontal $z = 1$ con vectores $\mathbf{u} = (2,0,0)$, $\mathbf{v} = (0,2,0)$.
+
+---
+
+## Plano paramétrico (T039 - MED-04.10-V)
+
+Mismo que punto-vectores pero enfocado en la parametrización $\mathbf{X} = \mathbf{P} + s\mathbf{u} + t\mathbf{v}$.
+
+```plane3d
+id: plane3d-parametric
+mode: parametric
+point: [0, 0, 0]
+vectorU: [2, 1, 0]
+vectorV: [-1, 2, 0]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+xDomain: [-3, 3]
+yDomain: [-3, 3]
+color: "#f97316"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano paramétrico
+labelPoint: P
+labelU: u
+labelV: v
+labelNormal: n
+```
+
+Plano $z = 0$ con malla paramétrica generada por $\mathbf{u} = (2,1,0)$ y $\mathbf{v} = (-1,2,0)$.
+
+---
+
+## Planos paralelos y perpendiculares (T041 - MED-04.11-V)
+
+Dos planos con normales $\mathbf{n}_1$ y $\mathbf{n}_2$.
+- Paralelos: $\mathbf{n}_1 \times \mathbf{n}_2 = \mathbf{0}$
+- Perpendiculares: $\mathbf{n}_1 \cdot \mathbf{n}_2 = 0$
+
+```plane3d
+id: plane3d-parallel
+mode: point-normal
+point: [0, 0, 0]
+normal: [1, 1, 1]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+showIntercepts: true
+xDomain: [-5, 5]
+yDomain: [-5, 5]
+color: "#3b82f6"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano 1 (n₁)
+labelPoint: P₁
+labelNormal: n₁
+---
+plane3d
+id: plane3d-perpendicular
+mode: point-normal
+point: [0, 0, 0]
+normal: [1, -1, 0]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+showIntercepts: true
+xDomain: [-5, 5]
+yDomain: [-5, 5]
+color: "#ef4444"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano 2 (n₂)
+labelPoint: P₂
+labelNormal: n₂
+```
+
+Plano 1: $x + y + z = 0$, Plano 2: $x - y = 0$. $\mathbf{n}_1 \cdot \mathbf{n}_2 = 0$ → perpendiculares.
+
+---
+
+## Intersección recta-plano (T043 - MED-04.12-V)
+
+Recta $\mathbf{r}(t) = \mathbf{P} + t\mathbf{v}$ intersectando plano $\mathbf{n} \cdot (\mathbf{X} - \mathbf{P}_0) = 0$.
+
+```line3d
+id: line-plane-intersection
+point: [0, 0, 0]
+direction: [1, 0, 0]
+tDomain: [-3, 3]
+showPoint: true
+showDirection: true
+color: "#3b82f6"
+colorPoint: "#10b981"
+colorDirection: "#f59e0b"
+labelPoint: P
+labelDirection: v
+label: Recta r(t)
+---
+plane3d
+id: plane3d-line-intersection
+mode: point-normal
+point: [0, 0, 0]
+normal: [1, 1, 1]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+showIntercepts: true
+xDomain: [-3, 3]
+yDomain: [-3, 3]
+color: "#3b82f6"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano x+y+z=0
+labelPoint: P₀
+labelNormal: n
+```
+
+Recta $x$-eje intersecta plano $x+y+z=0$ en $(\frac{1}{3}, \frac{1}{3}, \frac{1}{3})$.
+
+---
+
+## Intersección dos planos (T045 - MED-04.13-V)
+
+Dos planos se intersectan en una recta (si no son paralelos).
+
+```plane3d
+id: plane3d-intersect-1
+mode: point-normal
+point: [0, 0, 0]
+normal: [1, 0, 0]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+showIntercepts: true
+xDomain: [-3, 3]
+yDomain: [-3, 3]
+color: "#3b82f6"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano 1: x=0 (yz-plano)
+labelPoint: P₁
+labelNormal: n₁
+---
+plane3d
+id: plane3d-intersect-2
+mode: point-normal
+point: [0, 0, 0]
+normal: [0, 1, 0]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+showIntercepts: true
+xDomain: [-3, 3]
+yDomain: [-3, 3]
+color: "#ef4444"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Plano 2: y=0 (xz-plano)
+labelPoint: P₂
+labelNormal: n₂
+```
+
+Plano 1: $x=0$ (plano $yz$), Plano 2: $y=0$ (plano $xz$). Se intersectan en el eje $z$ (recta $x=0, y=0$).
+
+---
+
+## Intersección tres planos (T047 - MED-04.14-V)
+
+Tres planos pueden intersectarse en un punto, una recta, un plano o conjunto vacío.
+
+```plane3d
+id: three-planes-1
+mode: point-normal
+point: [0, 0, 0]
+normal: [1, 0, 0]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+xDomain: [-3, 3]
+yDomain: [-3, 3]
+color: "#3b82f6"
+label: Plano 1: x=0
+---
+plane3d
+id: three-planes-2
+mode: point-normal
+point: [0, 0, 0]
+normal: [0, 1, 0]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+xDomain: [-3, 3]
+yDomain: [-3, 3]
+color: "#ef4444"
+label: Plano 2: y=0
+---
+plane3d
+id: three-planes-3
+mode: point-normal
+point: [0, 0, 0]
+normal: [0, 0, 1]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+xDomain: [-3, 3]
+yDomain: [-3, 3]
+color: "#22c55e"
+label: Plano 3: z=0
+```
+
+Tres planos coordenados $x=0$, $y=0$, $z=0$ se intersectan en el origen $(0,0,0)$.
+
+---
+
+## Caso degenerado: 3 puntos colineales (T036 - MED-04.08-C)
+
+```plane3d
+id: plane3d-degenerate
+mode: three-points
+pointA: [0, 0, 0]
+pointB: [1, 1, 1]
+pointC: [2, 2, 2]
+origin: [0, 0, 0]
+showPoint: true
+showNormal: true
+xDomain: [-3, 3]
+yDomain: [-3, 3]
+color: "#ef4444"
+colorPoint: "#10b981"
+colorNormal: "#f59e0b"
+opacity: 0.3
+label: Puntos colineales (degenerado)
+labelPoint: A
+labelNormal: n
+```
+
+Los puntos $A(0,0,0)$, $B(1,1,1)$, $C(2,2,2)$ son colineales → no definen un plano único.

@@ -21,6 +21,11 @@ async function visit(page) {
     try {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 4000 });
       await page.getByRole("tab", { name: "Insertar" }).waitFor({ timeout: 5000 });
+      const editor = page.locator(".bwjm-code-textarea");
+      await editor.waitFor({ timeout: 5000 });
+      assert.equal(await editor.inputValue(), "", "Studio should open with a blank document");
+      await page.getByRole("tab", { name: "Datos" }).click();
+      await page.getByRole("button", { name: "Riemann", exact: true }).click();
       await page.locator(sceneSelector + " .bwjm-riemann-rectangle").first().waitFor({ timeout: 10000 });
       return;
     } catch (error) {
@@ -30,7 +35,7 @@ async function visit(page) {
   }
 }
 async function variable(page, name, value) {
-  const row = page.locator(".bwjm-slider-row").filter({ has: page.locator("span").filter({ hasText: new RegExp("^" + name + ":$") }) });
+  const row = page.locator(".bwjm-slider-row").filter({ has: page.locator("label").filter({ hasText: new RegExp("^" + name + "$") }) });
   assert.equal(await row.count(), 1, "Missing native slider for " + name);
   const slider = row.locator('input[type="range"]');
   await slider.evaluate((el, next) => {
@@ -124,7 +129,8 @@ try {
   const downloaded = await downloadReady;
   assert.equal(downloaded.suggestedFilename(), "riemann-guardada.bwjm");
   const savedContent = await readFile(await downloaded.path(), "utf8");
-  assert.equal(savedContent, original, "Saving wrote runtime values into Markdown");
+  assert(savedContent.endsWith(original), "Saving changed the lesson Markdown content");
+  assert(savedContent.startsWith("```manifest\n"), "Saved document lacks its portability manifest");
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator('input[accept=".bwjm,.jm,.md,.txt"]').setInputFiles({

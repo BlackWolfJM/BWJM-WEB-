@@ -25,6 +25,41 @@ export interface MathMDDiagnostic {
   path?: ReadonlyArray<string | number>;
 }
 
+/**
+ * Document Manifest for reproducible scientific documents.
+ * Stores initial conditions, engine version, and state for exact reopening.
+ */
+export interface DocumentManifest {
+  /** Manifest schema version for migrations */
+  manifestVersion: 1;
+  /** MathMD engine version that created this document */
+  engineVersion: string;
+  /** ISO timestamp of creation */
+  createdAt: string;
+  /** ISO timestamp of last modification */
+  updatedAt: string;
+  /** Initial conditions for reproducible graphs */
+  initialConditions?: {
+    /** Parameter values for graphs at creation time */
+    graphParameters?: Record<string, Record<string, number>>;
+    /** Camera state for 3D scenes */
+    cameraState?: Record<string, CameraState>;
+    /** Timeline positions */
+    timelinePositions?: Record<string, number>;
+  };
+  /** Schema version for node validation */
+  schemaVersion?: string;
+}
+
+/** Camera state for 3D scene reproducibility */
+export interface CameraState {
+  position: [number, number, number];
+  target: [number, number, number];
+  up: [number, number, number];
+  fov?: number;
+  projection?: "perspective" | "orthographic";
+}
+
 export interface MathMDNodeBase {
   id: string;
   range: SourceRange;
@@ -35,6 +70,8 @@ export interface MathMDDocument {
   source: string;
   children: MathMDNode[];
   diagnostics: MathMDDiagnostic[];
+  /** Optional manifest for reproducible document reopening */
+  manifest?: DocumentManifest;
 }
 
 // --- Specific AST Nodes ---
@@ -76,6 +113,7 @@ export interface Surface3DNode extends MathMDNodeBase {
   yDomain: [number, number];
   samples?: number;
   contours?: boolean;
+  contourColor?: string;
   /** Controls whether a time-dependent surface is animated by the t timeline. */
   animated?: boolean;
   /** Optional document analysis; never required to plot a surface. */
@@ -461,6 +499,7 @@ export interface ConicNode extends MathMDNodeBase {
 export interface SliderNode extends MathMDNodeBase {
   type: "slider";
   name: string;
+  label?: string;
   min: number;
   max: number;
   step: number;
@@ -706,13 +745,16 @@ export interface StatisticsNode extends MathMDNodeBase {
 /** Ten independent calculus visualization modes, all serializable as .bwjm text. */
 export type CalculusVizMode =
   | "area-dx" | "area-dy" | "area-pieces" | "area-parametric" | "area-polar"
-  | "double-region" | "change-order" | "double-polar" | "revolution" | "green";
+  | "double-region" | "change-order" | "double-polar" | "revolution" | "green" | "riemann";
 
 export interface CalculusVizNode extends MathMDNodeBase {
   type: "calculusviz";
   paramControls?: GraphParameterControls;
   mode: CalculusVizMode;
   domain: [number, number];
+  partitions?: number | string;
+  upperBound?: string;
+  color?: string;
   f?: string;
   g?: string;
   integrand?: string;
@@ -909,6 +951,7 @@ export const surface3dSchema = mathmdNodeBaseSchema.extend({
   yDomain: domainSchema,
   samples: z.number().int().min(2).max(200).optional(),
   contours: z.boolean().optional(),
+  contourColor: z.string().regex(/^#[\da-f]{6}$/i).optional(),
   animated: z.boolean().optional(),
   showInfo: z.boolean().optional(),
   color: z.string().optional(),
@@ -997,6 +1040,7 @@ export const tangentplaneSchema = mathmdNodeBaseSchema.extend({
 
 const sliderNodeSchema = mathmdNodeBaseSchema.extend({
   type: z.literal("slider"),
+  label: z.string().min(1).max(80).optional(),
   name: controlNameSchema,
   min: z.number().finite(),
   max: z.number().finite(),
@@ -1304,9 +1348,13 @@ export const calculusVizSchema = mathmdNodeBaseSchema.extend({
   paramControls: graphParameterControlsSchema.optional(),
   mode: z.enum([
     "area-dx", "area-dy", "area-pieces", "area-parametric", "area-polar",
-    "double-region", "change-order", "double-polar", "revolution", "green",
+    "double-region", "change-order", "double-polar", "revolution", "green", "riemann",
   ]),
   domain: domainSchema,
+  partitions: z.union([z.number().int().min(1).max(500),
+    z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,31}$/)]).optional(),
+  upperBound: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,31}$/).optional(),
+  color: z.string().regex(/^#[\da-f]{6}$/i).optional(),
   f: z.string().min(1).max(1024).optional(),
   g: z.string().min(1).max(1024).optional(),
   integrand: z.string().min(1).max(1024).optional(),
@@ -1329,7 +1377,7 @@ function validateCalculusViz(
   context: z.RefinementCtx,
 ): void {
   const betweenModes = ["area-dx", "area-dy", "area-pieces", "area-polar",
-    "double-region", "change-order", "double-polar", "revolution"];
+    "double-region", "change-order", "double-polar", "revolution", "riemann"];
   if (betweenModes.includes(data.mode) && (!data.f || !data.g)) {
     context.addIssue({code:z.ZodIssueCode.custom,
       message:"This mode requires nonempty expressions f and g", path:["f"]});
@@ -1866,12 +1914,44 @@ export const mathmdNodeSchema = mathmdNodeDiscriminatedUnion.superRefine((node, 
   }
 });
 
+/** Camera state schema for manifest */
+const cameraStateSchema = z.object({
+  position: z.tuple([z.number(), z.number(), z.number()]),
+  target: z.tuple([z.number(), z.number(), z.number()]),
+  up: z.tuple([z.number(), z.number(), z.number()]),
+  fov: z.number().optional(),
+  projection: z.enum(["perspective", "orthographic"]).optional(),
+});
+
+/** Initial conditions schema for manifest */
+const initialConditionsSchema = z.object({
+  graphParameters: z.record(z.record(z.number())).optional(),
+  cameraState: z.record(cameraStateSchema).optional(),
+  timelinePositions: z.record(z.number()).optional(),
+}).optional();
+
+/** Document Manifest schema */
+const documentManifestSchema = z.object({
+  manifestVersion: z.literal(1),
+  engineVersion: z.string(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  initialConditions: initialConditionsSchema,
+  schemaVersion: z.string().optional(),
+}).strict();
+
 // Document schema
 export const mathmdDocumentSchema = z.object({
   type: z.literal("document"),
   source: z.string(),
   children: z.array(mathmdNodeSchema),
   diagnostics: z.array(mathmdDiagnosticSchema),
+  manifest: documentManifestSchema.optional(),
 }).strict();
 
-export type { z };
+/** Type inferred from initialConditionsSchema */
+export type InitialConditions = z.infer<typeof initialConditionsSchema>;
+
+export { documentManifestSchema, cameraStateSchema, initialConditionsSchema };
+
+export { z } from "zod";

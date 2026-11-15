@@ -165,12 +165,23 @@ describe('PlotlyRenderer', () => {
       xDomain: [-5, 5],
       yDomain: [-5, 5],
       samples: 10,
-      contours: true
+      contours: true,
+      color: '#25634d',
+      contourColor: '#f97316',
     } as any;
 
     // This should not throw
     expect(() => renderer.render(surfaceNode)).not.toThrow();
     expect(newPlot).toHaveBeenCalledOnce();
+    expect(newPlot).toHaveBeenCalledWith(
+      expect.anything(),
+      [expect.objectContaining({
+        colorscale: [[0, '#25634d'], [1, '#25634d']],
+        contours: { z: { show: true, usemap: false, color: '#f97316', width: 2 } },
+      })],
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('uses surface samples prepared by the core for reactive equations', () => {

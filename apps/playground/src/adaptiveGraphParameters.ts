@@ -34,7 +34,7 @@ export function discoverGraphParameters(node: ParameterizedGraph): GraphParamete
   try { names = extractFreeParameters(graphExpressions(node)); }
   catch { return []; } // malformed equations must not bring down the Studio UI
   // "n" in double integration controls integration resolution, not an independent coordinate.
-  if(node.type==="calculusviz"&&!names.includes("n"))names.push("n");
+  if(node.type==="calculusviz"&&node.mode!=="riemann"&&!names.includes("n"))names.push("n");
   return names.slice(0,8).map(name => {
     if(name==="n") return {name,min:30,max:300,step:10,default:120,integer:true};
     if(name==="b"||name==="c")return {name,min:0.1,max:4,step:0.1,default:1};

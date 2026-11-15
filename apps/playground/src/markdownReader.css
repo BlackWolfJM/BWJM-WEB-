@@ -1,0 +1,48 @@
+.bwjm-prose-block {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bwjm-prose-block img {
+  max-inline-size: 100%;
+  block-size: auto;
+  vertical-align: middle;
+}
+
+.bwjm-prose-block figure {
+  margin: 1rem 0 1.3rem;
+}
+
+.bwjm-prose-block figure img {
+  display: block;
+  margin-inline: auto;
+}
+
+.bwjm-prose-block figcaption,
+.bwjm-image-unavailable {
+  margin-top: .45rem;
+  color: var(--text-secondary, #475569);
+  font-size: .875rem;
+}
+
+.bwjm-prose-block figcaption { text-align: center; }
+.bwjm-prose-block :is(ul, ol) { margin: .65rem 0; padding-inline-start: 1.5rem; }
+.bwjm-prose-block li > p { margin: .35rem 0; }
+.bwjm-prose-block a { color: var(--accent-math, #0369a1); text-decoration: underline; }
+.bwjm-prose-block hr { margin-block: 1.25rem; border: 0; border-top: 1px solid var(--border, #cbd5e1); }
+
+.bwjm-markdown-table-scroll {
+  max-inline-size: 100%;
+  margin: .85rem 0;
+  overflow: auto;
+}
+
+.bwjm-markdown-table-scroll table { border-collapse: collapse; inline-size: 100%; }
+.bwjm-markdown-table-scroll :is(th, td) {
+  padding: .45rem .65rem;
+  border: 1px solid var(--border, #cbd5e1);
+  text-align: start;
+}
+
+.bwjm-markdown-table-scroll th { background: var(--bg-elevated, #f1f5f9); }
+.bwjm-markdown-table-scroll:focus-visible { outline: 2px solid var(--primary, #4338ca); outline-offset: -2px; }
