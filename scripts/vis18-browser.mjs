@@ -35,7 +35,7 @@ async function visit(page) {
   }
 }
 async function variable(page, name, value) {
-  const row = page.locator(".bwjm-slider-row").filter({ has: page.locator("span").filter({ hasText: new RegExp("^" + name + ":$") }) });
+  const row = page.locator(".bwjm-slider-row").filter({ has: page.locator("label").filter({ hasText: new RegExp("^" + name + "$") }) });
   assert.equal(await row.count(), 1, "Missing native slider for " + name);
   const slider = row.locator('input[type="range"]');
   await slider.evaluate((el, next) => {
