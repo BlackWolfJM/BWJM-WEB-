@@ -88,6 +88,8 @@ export const FormulaModal: React.FC<FormulaModalProps> = ({ isOpen, onClose, onI
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="bwjm-modal-overlay" onClick={onClose} onKeyDown={handleKeyDown}>
       <div className="bwjm-modal-container" onClick={(e) => e.stopPropagation()}>
