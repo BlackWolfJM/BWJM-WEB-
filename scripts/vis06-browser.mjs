@@ -283,6 +283,12 @@ async function documentSidebarSmoke() {
   await visit(page);
   const sidebar = page.locator("#bwjm-document-sidebar");
   await sidebar.waitFor();
+  const tabBarToggle = page.locator('.bwjm-document-tabs .bwjm-document-sidebar-toggle');
+  await tabBarToggle.waitFor();
+  assert.equal(await page.locator(".bwjm-sidebar-restore").count(), 0,
+    "The old floating sidebar button must not overlap the editor");
+  assert.equal(await tabBarToggle.getAttribute("aria-expanded"), "true",
+    "Sidebar toggle should reflect the visible panel");
   assert((await sidebar.getAttribute("class")).includes("bwjm-sidebar-mode-expanded"));
   assert.equal(await page.getByRole("tab", { name: "Lecciones", exact: true }).count(), 0);
   await openText(page, "estructura.bwjm", "# Introducción\n\n## Método\n\n# Resultados");
@@ -299,6 +305,8 @@ async function documentSidebarSmoke() {
     "Choosing a rail icon should expand its panel");
   await page.getByRole("button", { name: "Ocultar panel del documento" }).click();
   assert.equal(await page.locator("#bwjm-document-sidebar").count(), 0);
+  assert.equal(await tabBarToggle.getAttribute("aria-expanded"), "false",
+    "Tab-bar toggle must indicate when the sidebar is hidden");
   await page.reload();
   await page.getByRole("button", { name: "Mostrar panel del documento" }).waitFor();
   assert.equal(await page.locator("#bwjm-document-sidebar").count(), 0,
