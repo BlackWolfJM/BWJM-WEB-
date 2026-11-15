@@ -21,6 +21,11 @@ async function visit(page) {
     try {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 4000 });
       await page.getByRole("tab", { name: "Insertar" }).waitFor({ timeout: 5000 });
+      const editor = page.locator(".bwjm-code-textarea");
+      await editor.waitFor({ timeout: 5000 });
+      assert.equal(await editor.inputValue(), "", "Studio should open with a blank document");
+      await page.getByRole("tab", { name: "Datos" }).click();
+      await page.getByRole("button", { name: "Riemann", exact: true }).click();
       await page.locator(sceneSelector + " .bwjm-riemann-rectangle").first().waitFor({ timeout: 10000 });
       return;
     } catch (error) {
