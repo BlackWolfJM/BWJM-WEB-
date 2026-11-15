@@ -149,6 +149,8 @@ export function createMarkdownReader(root: MarkdownNode, renderMath: RenderMath,
           math.tabIndex = 0;
           math.setAttribute("role", "region");
           math.setAttribute("aria-label", "Fórmula");
+        } else {
+          math.className = "bwjm-inline-math";
         }
         math.innerHTML = renderMath(node.value ?? "", display);
         return math;
