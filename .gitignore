@@ -65,3 +65,4 @@ acl-recovery/
 # OS files
 .DS_Store
 Thumbs.db
+/estructura.txt
