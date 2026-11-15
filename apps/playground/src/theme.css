@@ -3591,3 +3591,104 @@ code.bwjm-property-value {
   font-size: 0.88rem;
   line-height: 1.45;
 }
+
+
+/* Formula composer: guided editing first; raw LaTeX remains optional. */
+.bwjm-formula-dialog { max-width: 740px; max-height: min(92vh, 900px); }
+.bwjm-formula-dialog .bwjm-modal-body { gap: 1.05rem; max-height: 76vh; }
+.bwjm-formula-editor-switch {
+  display: flex;
+  gap: .3rem;
+  padding: .28rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-app);
+}
+.bwjm-formula-editor-switch button {
+  flex: 1;
+  min-height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: 600 .82rem var(--font-sans);
+}
+.bwjm-formula-editor-switch button.selected {
+  background: var(--bg-elevated);
+  color: var(--text-main);
+  box-shadow: 0 1px 5px rgba(0,0,0,.12);
+}
+.bwjm-formula-templates {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: .45rem;
+}
+.bwjm-formula-choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: .15rem;
+  min-height: 60px;
+  padding: .55rem .72rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+.bwjm-formula-choice strong {
+  font: 650 1.1rem var(--font-sans);
+  color: var(--text-main);
+}
+.bwjm-formula-choice span { font: 600 .78rem var(--font-sans); }
+.bwjm-formula-choice:hover { border-color: var(--border-focus); }
+.bwjm-formula-choice.selected {
+  background: var(--bg-elevated);
+  border-color: var(--primary);
+  box-shadow: inset 3px 0 0 var(--primary);
+  color: var(--text-main);
+}
+.bwjm-formula-fields {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: .65rem;
+}
+.bwjm-formula-field {
+  display: flex;
+  flex-direction: column;
+  gap: .32rem;
+  min-width: 0;
+  font: 600 .77rem var(--font-sans);
+  color: var(--text-secondary);
+}
+.bwjm-formula-fields .bwjm-formula-field:only-child { grid-column: 1 / -1; }
+.bwjm-formula-field .bwjm-modal-input { width: 100%; box-sizing: border-box; }
+.bwjm-formula-tip {
+  color: var(--text-muted);
+  font-size: .74rem;
+  line-height: 1.45;
+}
+.bwjm-formula-tag { max-width: 200px; }
+.bwjm-formula-preview {
+  min-height: 85px;
+  justify-content: center;
+  padding: 1rem;
+  line-height: 1.6;
+}
+.bwjm-formula-preview .katex-display { margin: .15em 0; }
+.bwjm-formula-preview-message { color: #9f1239; font: 500 .82rem var(--font-sans); text-align: center; }
+.bwjm-formula-dialog :is(button,input,textarea):focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+@media (max-width: 560px) {
+  .bwjm-formula-dialog { width: calc(100% - 20px); max-height: 95vh; }
+  .bwjm-formula-dialog .bwjm-modal-body { padding: .8rem; gap: .75rem; }
+  .bwjm-formula-templates { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .bwjm-formula-fields { grid-template-columns: 1fr; }
+  .bwjm-formula-choice { min-height: 51px; }
+  .bwjm-modal-footer { flex-wrap: wrap; }
+}

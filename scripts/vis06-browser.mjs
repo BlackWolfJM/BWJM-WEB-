@@ -276,12 +276,43 @@ async function pickerErrors() {
   await ctx.close();
 }
 
+async function formulaComposerSmoke() {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 850 } });
+  const page = await context.newPage();
+  await visit(page);
+  assert.equal(await page.locator(".bwjm-code-textarea").inputValue(), "",
+    "Studio must start with an empty document");
+  await page.getByRole("tab", { name: "Matemáticas" }).click();
+  await page.getByRole("button", { name: "Matriz", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Insertar fórmula matemática" });
+  await dialog.waitFor();
+  assert.equal(await dialog.getByRole("button", { name: "Editor visual" }).getAttribute("aria-pressed"), "true");
+  assert((await dialog.locator(".katex").count()) > 0, "The matrix needs a real KaTeX preview");
+  await dialog.getByRole("button", { name: "Insertar fórmula" }).click();
+  await page.waitForFunction(() => document.querySelector(".bwjm-code-textarea")?.value.includes("\\begin{bmatrix}"));
+  await page.locator("#bwjm-reader-panel .katex").first().waitFor();
+
+  await page.getByRole("tab", { name: "Insertar" }).click();
+  await page.getByRole("button", { name: "Fórmula", exact: true }).click();
+  const reopened = page.getByRole("dialog", { name: "Insertar fórmula matemática" });
+  await reopened.getByRole("button", { name: "LaTeX avanzado" }).click();
+  await reopened.locator("#bwjm-formula-latex").fill("$\\frac{1}{2}$");
+  assert((await reopened.locator(".katex").count()) > 0, "Pasted Markdown formula should render");
+  await reopened.getByRole("button", { name: "Insertar fórmula" }).click();
+  const content = await page.locator(".bwjm-code-textarea").inputValue();
+  assert(content.includes("\\frac{1}{2}"), "Formula was not inserted");
+  assert(!content.includes("$\\frac{1}{2}$"), "Pasted delimiters must not be doubled");
+  await context.close();
+  console.log("Formula composer browser OK: blank document, visual matrix, KaTeX reader and pasted LaTeX.");
+}
+
 try {
   await mkdir("/tmp/vis06-screens", { recursive: true });
   browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
   await portableRun("bwjm");
   await portableRun("jm");
   await pickerErrors();
+  await formulaComposerSmoke();
   console.log("VIS-06 navegador: OK (390px y 1280px, cancelación, corrupto, tamaño, pestaña, guardado/reapertura).");
 } finally {
   if (browser) await browser.close();

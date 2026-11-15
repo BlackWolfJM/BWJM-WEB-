@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, ChangeEvent } from "react";
+import { renderToString } from "katex";
+import "katex/dist/katex.min.css";
 import { createRoot } from "react-dom/client";
 import { parseMarkdown, parseMathMDWithMarkdown } from "@mathmd/parser";
 import { MAX_LOCAL_IMAGE_BYTES, portableImageMarkdown, validateLocalRaster } from "./localImages.js";
@@ -34,6 +36,7 @@ import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
 import { FormulaModal } from "./FormulaModal.js";
+import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
 import { ImageModal, type ImageInsertion } from "./ImageModal.js";
 import { insertEmbeddedImage } from "./documentImages.js";
 import { createMarkdownReader } from "./markdownReader.js";
@@ -153,14 +156,6 @@ function appendGraphColor(controls: HTMLTableSectionElement, name: string, value
   appendGraphSetting(controls, name, input);
 }
 
-declare global {
-  interface Window {
-    katex?: {
-      renderToString(tex: string, options?: { displayMode?: boolean; throwOnError?: boolean }): string;
-    };
-  }
-}
-
 /** The document and interactive slider share this one educational readout. */
 function updateVectorStudyReport(
   report: HTMLElement,
@@ -220,39 +215,14 @@ export function escapeHtml(str: string): string {
 }
 
 function renderMathToString(tex: string, displayMode: boolean): string {
-  if (typeof window !== "undefined" && window.katex) {
-    try {
-      return window.katex.renderToString(tex, { displayMode, throwOnError: false });
-    } catch (_err) {
-      void _err;
-    }
+  try {
+    return renderToString(tex, {
+      displayMode, throwOnError: false, trust: false, maxExpand: 1000,
+      maxSize: 20, output: "htmlAndMathml",
+    });
+  } catch {
+    return '<span class="bwjm-formula-error">No se pudo representar la fórmula.</span>';
   }
-
-  const cleaned = escapeHtml(
-    tex
-      .replace(/\\implies/g, " ⟹ ")
-      .replace(/\\ge/g, " ≥ ")
-      .replace(/\\le/g, " ≤ ")
-      .replace(/\\approx/g, " ≈ ")
-      .replace(/\\int_{([^}]+)}\^{([^}]+)}/g, "∫_{$1}^{$2} ")
-      .replace(/\\frac{([^}]+)}{([^}]+)}/g, "($1 / $2)")
-      .replace(/\\left\[/g, "[")
-      .replace(/\\right\]_0\^1/g, "]_{0}^{1}")
-      .replace(/\\left\(/g, "(")
-      .replace(/\\right\)/g, ")")
-      .replace(/\\cdot/g, " · ")
-      .replace(/\\pi/g, "π")
-      .replace(/\\alpha/g, "α")
-      .replace(/\\omega/g, "ω")
-      .replace(/\\,/g, " ")
-      .replace(/\\;/g, " ")
-      .replace(/\\/g, "")
-  );
-
-  if (displayMode) {
-    return `<div style="font-family: 'Cambria Math', KaTeX_Math, serif; font-size: 1.25rem; font-style: italic; color: #0284c7;">${cleaned}</div>`;
-  }
-  return `<span style="font-family: 'Cambria Math', KaTeX_Math, serif; font-style: italic; color: #0369a1; padding: 0 2px;">${cleaned}</span>`;
 }
 
 function renderTableBody(
@@ -562,6 +532,13 @@ export function BWJMStudio() {
   const [isRibbonCollapsed, setIsRibbonCollapsed] = useState(false);
   const [imageTarget, setImageTarget] = useState<{ id: string; source: string; offset: number }>();
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState<boolean>(false);
+  const [formulaPreset, setFormulaPreset] = useState<{ kind: FormulaKind; mode: FormulaMode }>({
+    kind: "expression", mode: "block",
+  });
+  const openFormulaComposer = (kind: FormulaKind = "expression", mode: FormulaMode = "block") => {
+    setFormulaPreset({ kind, mode });
+    setIsFormulaModalOpen(true);
+  };
   const [isChartModalOpen, setIsChartModalOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
   const [imageMessage, setImageMessage] = useState<string | null>(null);
@@ -673,7 +650,7 @@ export function BWJMStudio() {
         setIsCommandPaletteOpen((prev) => !prev);
       } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "m") {
         e.preventDefault();
-        setIsFormulaModalOpen(true);
+        openFormulaComposer();
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         handleSaveFile();
@@ -976,16 +953,16 @@ initialConditions:
       case "quote": insertAtCursor("> "); break;
       case "list": insertAtCursor(markdown.slice(0, editorView.toSourceOffset(textareaRef.current?.selectionStart ?? editorView.text.length)).endsWith("\n") ? "- " : "\n\n- "); break;
       case "rule": insertAtCursor("\n\n---\n\n"); break;
-      case "formula": setIsFormulaModalOpen(true); break;
+      case "formula": openFormulaComposer(); break;
       case "graph": setIsChartModalOpen(true); break;
       case "table":
         insertAtCursor("\n\n| Columna 1 | Columna 2 |\n|---|---|\n| Dato 1 | Dato 2 |\n\n");
         break;
       case "picture": pickLocalImage(); break;
-      case "equation": insertAtCursor("\n\n$$\n\\int_0^1 f(x)\\,dx\n$$\n\n"); break;
-      case "inline-math": insertAtCursor("$", "$"); break;
-      case "matrix": insertAtCursor("\n\n$$\n\\begin{bmatrix}a & b \\\\ c & d\\end{bmatrix}\n$$\n\n"); break;
-      case "integral": insertAtCursor("$\\int_{a}^{b} f(x)\\,dx$"); break;
+      case "equation": openFormulaComposer("expression", "block"); break;
+      case "inline-math": openFormulaComposer("expression", "inline"); break;
+      case "matrix": openFormulaComposer("matrix", "block"); break;
+      case "integral": openFormulaComposer("integral", "inline"); break;
       case "slider": insertAtCursor("\n" + fence +
         "slider\nname: a\nmin: 0.1\nmax: 5\nstep: 0.1\ndefault: 1\n" + fence + "\n"); break;
       case "data-table":
@@ -1030,7 +1007,7 @@ initialConditions:
       title: "Insertar Fórmula Matemática",
       category: "Matemáticas",
       shortcut: "Ctrl+Shift+M",
-      action: () => setIsFormulaModalOpen(true),
+      action: () => openFormulaComposer(),
     },
     {
       id: "insert-chart",
@@ -2644,6 +2621,7 @@ initialConditions:
 
       <FormulaModal
         isOpen={isFormulaModalOpen}
+        preset={formulaPreset}
         onClose={() => setIsFormulaModalOpen(false)}
         onInsert={(formulaText: string) => insertAtCursor(formulaText)}
       />
