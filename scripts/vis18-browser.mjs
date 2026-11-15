@@ -129,7 +129,8 @@ try {
   const downloaded = await downloadReady;
   assert.equal(downloaded.suggestedFilename(), "riemann-guardada.bwjm");
   const savedContent = await readFile(await downloaded.path(), "utf8");
-  assert.equal(savedContent, original, "Saving wrote runtime values into Markdown");
+  assert(savedContent.endsWith(original), "Saving changed the lesson Markdown content");
+  assert(savedContent.startsWith("```manifest\n"), "Saved document lacks its portability manifest");
 
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator('input[accept=".bwjm,.jm,.md,.txt"]').setInputFiles({
