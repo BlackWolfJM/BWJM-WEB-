@@ -39,7 +39,7 @@ import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
 import { resetSurfaceColor, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
-import { IconAtom, IconCheck, IconSidebar } from "./icons.js";
+import { IconAtom, IconCheck } from "./icons.js";
 import { FormulaModal } from "./FormulaModal.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
 import { ImageModal, type ImageInsertion } from "./ImageModal.js";
@@ -2574,7 +2574,8 @@ initialConditions:
       </header>
       <DocumentTabs documents={documents} activeId={activeId}
         onSelect={selectDocument} onClose={handleCloseDocument} onNew={handleNewDocument}
-        onRename={renameDocument}/>
+        onRename={renameDocument} sidebarVisible={sidebarMode !== "hidden"}
+        onToggleSidebar={toggleSidebar}/>
       <Ribbon activeView={viewMode} compactWorkspace={compactWorkspace} onAction={handleRibbonAction}
         theme={theme} onThemeChange={setTheme}
         collapsed={isRibbonCollapsed} onCollapseChange={setIsRibbonCollapsed}/>
@@ -2591,13 +2592,6 @@ initialConditions:
 
       <div ref={workspaceLayoutRef} className="bwjm-workspace-layout"
         onKeyDown={event => { if (compactSidebarVisible && event.key === "Escape") closeSidebar(); }}>
-        {sidebarMode === "hidden" && (
-          <button type="button" className="bwjm-sidebar-restore"
-            aria-label="Mostrar panel del documento" title="Mostrar panel (Ctrl+\\)"
-            onClick={showSidebar}>
-            <IconSidebar size={17}/> <span>Documento</span>
-          </button>
-        )}
         <SidebarLeft
           tab={sidebarTab}
           mode={sidebarMode}
