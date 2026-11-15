@@ -1,89 +1,133 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { renderToString } from "katex";
 import { IconX, IconCheck, IconFunction } from "./icons.js";
+import {
+  FORMULA_TEMPLATES, getFormulaTemplate, defaultFormulaValues,
+  buildGuidedFormula, normalizeFormulaInput, serializeFormula,
+  type FormulaKind, type FormulaMode, type FormulaValues,
+} from "./formulaComposer.js";
 
 interface FormulaModalProps {
   isOpen: boolean;
   onClose: () => void;
   onInsert: (formulaText: string) => void;
+  preset?: { kind: FormulaKind; mode: FormulaMode };
 }
 
-const TEMPLATES: Array<{ label: string; snippet: string; description: string }> = [
-  { label: "a/b", snippet: "\\frac{a}{b}", description: "Fracción" },
-  { label: "√x", snippet: "\\sqrt{x}", description: "Raíz cuadrada" },
-  { label: "xⁿ", snippet: "x^{n}", description: "Exponente" },
-  { label: "∫ₐᵇ", snippet: "\\int_{a}^{b} f(x)\\,dx", description: "Integral definida" },
-  { label: "∑", snippet: "\\sum_{i=1}^{n} x_i", description: "Sumatoria" },
-  { label: "lim", snippet: "\\lim_{x \\to 0} f(x)", description: "Límite" },
-  { label: "df/dx", snippet: "\\frac{df}{dx}", description: "Derivada" },
-  { label: "[a b; c d]", snippet: "\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}", description: "Matriz 2x2" },
-  { label: "(a/b)", snippet: "\\left( \\frac{a}{b} \\right)", description: "Paréntesis escalables" },
-  { label: "π", snippet: "\\pi", description: "Número pi" },
-  { label: "α", snippet: "\\alpha", description: "Alfa" },
-  { label: "θ", snippet: "\\theta", description: "Theta" },
-  { label: "∞", snippet: "\\infty", description: "Infinito" },
-  { label: "≤", snippet: "\\le", description: "Menor o igual" },
-  { label: "≥", snippet: "\\ge", description: "Mayor o igual" },
-  { label: "±", snippet: "\\pm", description: "Más o menos" },
-  { label: "⟹", snippet: "\\implies", description: "Implica" },
+type EditorMode = "visual" | "latex";
+const SYMBOLS = [
+  { label: "π", latex: "\\pi" },
+  { label: "α", latex: "\\alpha" },
+  { label: "θ", latex: "\\theta" },
+  { label: "∞", latex: "\\infty" },
+  { label: "≤", latex: "\\le" },
+  { label: "≥", latex: "\\ge" },
+  { label: "±", latex: "\\pm" },
+  { label: "√", latex: "\\sqrt{x}" },
+  { label: "×", latex: "\\times" },
 ];
 
-export const FormulaModal: React.FC<FormulaModalProps> = ({ isOpen, onClose, onInsert }) => {
-  const [latex, setLatex] = useState<string>("\\int_{0}^{1} (x - x^2)\\,dx = \\frac{1}{6}");
-  const [mode, setMode] = useState<"inline" | "block" | "numbered">("block");
-  const [label, setLabel] = useState<string>("1");
-  const [previewHtml, setPreviewHtml] = useState<string>("");
-  const [hasError, setHasError] = useState<boolean>(false);
-  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+export const FormulaModal: React.FC<FormulaModalProps> = ({
+  isOpen, onClose, onInsert, preset = { kind: "expression", mode: "block" },
+}) => {
+  const [editorMode, setEditorMode] = useState<EditorMode>("visual");
+  const [kind, setKind] = useState<FormulaKind>(preset.kind);
+  const [fields, setFields] = useState<FormulaValues>(() => defaultFormulaValues(preset.kind));
+  const [latex, setLatex] = useState<string>(() => buildGuidedFormula(preset.kind, defaultFormulaValues(preset.kind)));
+  const [mode, setMode] = useState<FormulaMode>(preset.mode);
+  const [label, setLabel] = useState("1");
+  const latexRef = useRef<HTMLTextAreaElement | null>(null);
+  const guidedRef = useRef<HTMLInputElement | null>(null);
 
+  // Each invocation starts from the tool the user clicked, not a stale previous formula.
   useEffect(() => {
     if (!isOpen) return;
-    const timeout = setTimeout(() => {
-      inputRef.current?.focus();
-    }, 50);
-    return () => clearTimeout(timeout);
-  }, [isOpen]);
+    const values = defaultFormulaValues(preset.kind);
+    setKind(preset.kind);
+    setFields(values);
+    setLatex(buildGuidedFormula(preset.kind, values));
+    setMode(preset.mode);
+    setEditorMode("visual");
+    setLabel("1");
+  }, [isOpen, preset.kind, preset.mode]);
 
   useEffect(() => {
-    if (!isOpen) return;
-    try {
-      const rendered = window.katex.renderToString(latex.trim() || "\\text{...}", {
-        displayMode: mode !== "inline",
-        throwOnError: true,
-      });
-      setPreviewHtml(rendered);
-      setHasError(false);
-    } catch {
-      setHasError(true);
-      setPreviewHtml(`<span class="bwjm-modal-error">Error de sintaxis LaTeX</span>`);
+    if (!isOpen || editorMode !== "visual") return;
+    const timeout = window.setTimeout(() => guidedRef.current?.focus(), 50);
+    return () => window.clearTimeout(timeout);
+  }, [isOpen, editorMode, kind]);
+
+  const template = getFormulaTemplate(kind);
+  const incomplete = editorMode === "visual" &&
+    template.fields.some(field => !(fields[field.key] ?? "").trim());
+  const cleanLatex = normalizeFormulaInput(latex);
+
+  const preview = useMemo(() => {
+    if (!cleanLatex || incomplete) {
+      return { html: "", error: "Completa los campos para visualizar tu fórmula." };
     }
-  }, [latex, mode, isOpen]);
+    try {
+      // Validate label too; KaTeX handles the actual math syntax.
+      serializeFormula(cleanLatex, mode, label);
+      const expression = mode === "numbered"
+        ? cleanLatex + " \\tag{" + (label.trim() || "1") + "}"
+        : cleanLatex;
+      return {
+        html: renderToString(expression, {
+          displayMode: mode !== "inline", throwOnError: true, trust: false,
+          maxExpand: 1000, maxSize: 20, output: "htmlAndMathml",
+        }),
+        error: "",
+      };
+    } catch {
+      return {
+        html: "",
+        error: "No se pudo interpretar la fórmula. Comprueba que esté completa y revisa los símbolos.",
+      };
+    }
+  }, [cleanLatex, incomplete, mode, label]);
 
-  const handleApplyTemplate = (snippet: string) => {
-    setLatex((prev) => (prev.trim().length === 0 ? snippet : `${prev} ${snippet}`));
-    inputRef.current?.focus();
+  const chooseKind = (next: FormulaKind) => {
+    const defaults = defaultFormulaValues(next);
+    setKind(next);
+    setFields(defaults);
+    setLatex(buildGuidedFormula(next, defaults));
+  };
+
+  const updateField = (key: string, value: string) => {
+    const next = { ...fields, [key]: value };
+    setFields(next);
+    setLatex(buildGuidedFormula(kind, next));
+  };
+
+  const insertSymbol = (symbol: string) => {
+    setEditorMode("latex");
+    setLatex(current => {
+      const textarea = latexRef.current;
+      if (!textarea) return current + (current ? " " : "") + symbol;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      return current.slice(0, start) + symbol + current.slice(end);
+    });
   };
 
   const handleConfirm = () => {
-    const trimmed = latex.trim();
-    if (!trimmed) return;
-
-    let output = "";
-    if (mode === "inline") {
-      output = `$${trimmed}$`;
-    } else if (mode === "block") {
-      output = `\n$$\n${trimmed}\n$$\n`;
-    } else {
-      output = `\n$$\n${trimmed} \\tag{${label || "1"}}\n$$\n`;
+    if (preview.error) return;
+    try {
+      const output = serializeFormula(cleanLatex, mode, label);
+      onInsert(output);
+      onClose();
+    } catch {
+      // The insertion button is disabled for invalid input; don't insert malformed source.
     }
-
-    onInsert(output);
-    onClose();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.stopPropagation();
       onClose();
-    } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
       handleConfirm();
     }
   };
@@ -92,109 +136,119 @@ export const FormulaModal: React.FC<FormulaModalProps> = ({ isOpen, onClose, onI
 
   return (
     <div className="bwjm-modal-overlay" onClick={onClose} onKeyDown={handleKeyDown}>
-      <div className="bwjm-modal-container" onClick={(e) => e.stopPropagation()}>
+      <div className="bwjm-modal-container bwjm-formula-dialog" role="dialog" aria-modal="true"
+        aria-labelledby="bwjm-formula-dialog-title" onClick={event => event.stopPropagation()}>
         <div className="bwjm-modal-header">
-          <div className="bwjm-modal-title">
+          <div className="bwjm-modal-title" id="bwjm-formula-dialog-title">
             <IconFunction size={18} />
-            <span>Insertar Fórmula Matemática</span>
+            <span>Insertar fórmula matemática</span>
           </div>
-          <button className="bwjm-modal-close" onClick={onClose} aria-label="Cerrar">
+          <button type="button" className="bwjm-modal-close" onClick={onClose} aria-label="Cerrar">
             <IconX size={16} />
           </button>
         </div>
 
         <div className="bwjm-modal-body">
-          <div className="bwjm-modal-field">
-            <label className="bwjm-modal-label">Paleta de Plantillas y Símbolos</label>
-            <div className="bwjm-template-palette">
-              {TEMPLATES.map((tmpl) => (
-                <button
-                  key={tmpl.label}
-                  type="button"
-                  className="bwjm-template-chip"
-                  title={tmpl.description}
-                  onClick={() => handleApplyTemplate(tmpl.snippet)}
-                >
-                  {tmpl.label}
-                </button>
-              ))}
+          <div className="bwjm-formula-editor-switch" role="group" aria-label="Forma de crear la fórmula">
+            <button type="button" className={editorMode === "visual" ? "selected" : ""}
+              aria-pressed={editorMode === "visual"} onClick={() => {
+                setEditorMode("visual");
+                setLatex(buildGuidedFormula(kind, fields));
+              }}>Editor visual</button>
+            <button type="button" className={editorMode === "latex" ? "selected" : ""}
+              aria-pressed={editorMode === "latex"} onClick={() => setEditorMode("latex")}>
+              LaTeX avanzado
+            </button>
+          </div>
+
+          {editorMode === "visual" ? (
+            <>
+              <div className="bwjm-modal-field">
+                <span className="bwjm-modal-label">Elige qué quieres escribir</span>
+                <div className="bwjm-formula-templates" role="group" aria-label="Tipos de fórmula">
+                  {FORMULA_TEMPLATES.map(item => (
+                    <button key={item.id} type="button"
+                      className={"bwjm-formula-choice " + (kind === item.id ? "selected" : "")}
+                      aria-pressed={kind === item.id} title={item.description}
+                      onClick={() => chooseKind(item.id)}>
+                      <strong aria-hidden="true">{item.symbol}</strong>
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="bwjm-modal-field">
+                <span className="bwjm-modal-label">{template.description}</span>
+                <div className="bwjm-formula-fields">
+                  {template.fields.map((field, index) => (
+                    <label key={field.key} className="bwjm-formula-field">
+                      <span>{field.label}</span>
+                      <input ref={index === 0 ? guidedRef : undefined} type="text"
+                        className="bwjm-modal-input" value={fields[field.key] ?? ""}
+                        placeholder={field.placeholder} onChange={event => updateField(field.key, event.target.value)}
+                        autoComplete="off" spellCheck={false} />
+                    </label>
+                  ))}
+                </div>
+                <small className="bwjm-formula-tip">Escribe valores normales, por ejemplo x, 2 o x^2. Los comandos se generan automáticamente.</small>
+              </div>
+            </>
+          ) : (
+            <div className="bwjm-modal-field">
+              <label className="bwjm-modal-label" htmlFor="bwjm-formula-latex">Código LaTeX (opcional)</label>
+              <textarea id="bwjm-formula-latex" ref={latexRef} rows={4} spellCheck={false}
+                className={"bwjm-modal-textarea" + (preview.error ? " has-error" : "")}
+                value={latex} onChange={event => setLatex(event.target.value)}
+                placeholder="Ej. \frac{x^2+1}{2}" />
+              <small className="bwjm-formula-tip">Puedes pegar una fórmula entre $...$ o $$...$$. Studio quitará esos delimitadores al insertarla.</small>
+              <div className="bwjm-template-palette" role="group" aria-label="Símbolos matemáticos">
+                {SYMBOLS.map(symbol => (
+                  <button key={symbol.label} type="button" className="bwjm-template-chip"
+                    onClick={() => insertSymbol(symbol.latex)}>{symbol.label}</button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="bwjm-modal-field">
-            <label className="bwjm-modal-label">Código LaTeX</label>
-            <textarea
-              ref={inputRef}
-              className={`bwjm-modal-textarea ${hasError ? "has-error" : ""}`}
-              rows={3}
-              value={latex}
-              onChange={(e) => setLatex(e.target.value)}
-              placeholder="Escribe la expresión en notación LaTeX, p. ej. \\frac{a}{b}"
-            />
-          </div>
-
-          <div className="bwjm-modal-field">
-            <label className="bwjm-modal-label">Modo de Inserción</label>
+            <span className="bwjm-modal-label">Cómo aparecerá en tu documento</span>
             <div className="bwjm-modal-radios">
-              <label className="bwjm-radio-label">
-                <input
-                  type="radio"
-                  name="formula-mode"
-                  checked={mode === "inline"}
-                  onChange={() => setMode("inline")}
-                />
-                <span>En línea ($ ... $)</span>
-              </label>
-              <label className="bwjm-radio-label">
-                <input
-                  type="radio"
-                  name="formula-mode"
-                  checked={mode === "block"}
-                  onChange={() => setMode("block")}
-                />
-                <span>En bloque ($$ ... $$)</span>
-              </label>
-              <label className="bwjm-radio-label">
-                <input
-                  type="radio"
-                  name="formula-mode"
-                  checked={mode === "numbered"}
-                  onChange={() => setMode("numbered")}
-                />
-                <span>Ecuación numerada</span>
-              </label>
-              {mode === "numbered" && (
-                <input
-                  type="text"
-                  className="bwjm-modal-tag-input"
-                  value={label}
-                  onChange={(e) => setLabel(e.target.value)}
-                  placeholder="Ej. 1"
-                  style={{ width: "60px", marginLeft: "0.5rem" }}
-                />
-              )}
+              <label className="bwjm-radio-label"><input type="radio" name="formula-mode"
+                checked={mode === "inline"} onChange={() => setMode("inline")} />
+                <span>Dentro del texto</span></label>
+              <label className="bwjm-radio-label"><input type="radio" name="formula-mode"
+                checked={mode === "block"} onChange={() => setMode("block")} />
+                <span>Centrada</span></label>
+              <label className="bwjm-radio-label"><input type="radio" name="formula-mode"
+                checked={mode === "numbered"} onChange={() => setMode("numbered")} />
+                <span>Numerada</span></label>
             </div>
+            {mode === "numbered" && (
+              <label className="bwjm-formula-field bwjm-formula-tag">
+                <span>Número o etiqueta</span>
+                <input type="text" className="bwjm-modal-input" value={label}
+                  onChange={event => setLabel(event.target.value)} maxLength={40} />
+              </label>
+            )}
           </div>
 
           <div className="bwjm-modal-field">
-            <label className="bwjm-modal-label">Vista Previa KaTeX</label>
-            <div
-              className="bwjm-modal-preview-box"
-              role="region"
-              aria-label="Vista previa de la fórmula"
-              tabIndex={0}
-              dangerouslySetInnerHTML={{ __html: previewHtml }}
-            />
+            <span className="bwjm-modal-label">Así se verá tu fórmula</span>
+            <div className="bwjm-modal-preview-box bwjm-formula-preview"
+              role="region" aria-label="Vista previa de la fórmula" aria-live="polite">
+              {preview.error
+                ? <span className="bwjm-formula-preview-message">{preview.error}</span>
+                : <span dangerouslySetInnerHTML={{ __html: preview.html }} />}
+            </div>
           </div>
         </div>
 
         <div className="bwjm-modal-footer">
-          <button className="bwjm-btn-secondary" onClick={onClose}>
-            Cancelar
-          </button>
-          <button className="bwjm-btn-primary" onClick={handleConfirm} disabled={hasError}>
+          <button type="button" className="bwjm-btn-secondary" onClick={onClose}>Cancelar</button>
+          <button type="button" className="bwjm-btn-primary" onClick={handleConfirm}
+            disabled={Boolean(preview.error)}>
             <IconCheck size={14} />
-            <span>Insertar Fórmula</span>
+            <span>Insertar fórmula</span>
           </button>
         </div>
       </div>
