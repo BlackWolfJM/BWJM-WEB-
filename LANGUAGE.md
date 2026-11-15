@@ -138,9 +138,7 @@ $V = \mathbf{u} \cdot (\mathbf{v} \times \mathbf{w}) = \det(\mathbf{u}, \mathbf{
 - $V > 0$: triedro **dextrógiro** (mano derecha)
 - $V < 0$: triedro **latrógiro** (mano izquierda)
 - $V = 0$: vectores **coplanares** (paralelepípedo colapsado)
-El renderizado 3D dibuja el paralelepípedo con sus 3 caras visibles (base y 2 laterales)
-y muestra la etiqueta del volumen en el centroide indicando el valor firmado y su
-orientación. El color del sombreado se controla con `colorVolume: "#8b5cf6"` (por defecto).
+El renderizado 3D dibuja el paralelepípedo con sus 3 caras visibles (base y 2 laterales) y muestra la etiqueta del volumen en el centroide indicando su valor firmado y el signo de su orientación. El color del sombreado se controla con `colorVolume: "#8b5cf6"` (por defecto).
 El procedimiento didáctico desglosa la fórmula, el cálculo exacto del determinante y
 las permutaciones cíclicas que conservan el volumen.
 
@@ -165,7 +163,7 @@ precisión de coma flotante. El procedimiento explica la interpretación geomét
 - `collapseFactor ∈ [0, 1]`: interpola `w` hacia su proyección coplanar (`coplanar`) o hacia cero (`zero`)
 - `collapseTarget: "coplanar"` interpola la componente perpendicular al plano $u,v$ hacia cero
 - `collapseTarget: "zero"` interpola $w \to \mathbf{0}$
-- El slider `collapseFactor` (0-100%) actualiza el volumen en tiempo real
+- El deslizador `collapseFactor` (0–100 %) actualiza el volumen en tiempo real
 - Al factor = 1: **⚠ PARELEPÍPEDO COLAPSADO: Volumen = 0 (coplanar)**
 - El procedimiento didáctico desglosa la interpolación y el volumen en cada paso
 

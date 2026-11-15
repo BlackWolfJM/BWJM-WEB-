@@ -1,4 +1,4 @@
-import { parseMarkdown, type MarkdownNode as MdastNode } from "./markdown.js";
+import { parseMarkdown, type MarkdownNode } from "./markdown.js";
 export { parseMarkdown, type MarkdownNode } from "./markdown.js";
 import YAML from "yaml";
 import { normalizeDomainLimits, parseDomainLimit } from "./domainLimit.js";
@@ -44,6 +44,68 @@ import {
   calculusVizSchema,
 } from "@mathmd/ast";
 
+interface MdastPosition {
+  start: { line: number; column: number; offset: number };
+  end: { line: number; column: number; offset: number };
+}
+
+/** Minimal, renderer-neutral Markdown AST returned by Remark (also used by the reader). */
+export interface MdastNode {
+  type: string;
+  lang?: string | null;
+  value?: string;
+  position?: MdastPosition;
+  children?: MdastNode[];
+  depth?: number;
+  ordered?: boolean;
+  start?: number | null;
+  checked?: boolean | null;
+  url?: string;
+  title?: string | null;
+  alt?: string;
+  identifier?: string;
+  align?: Array<"left" | "right" | "center" | null>;
+}
+
+/** Keep Markdown, GFM and math parsing identical to the scientific parser. */
+export function parseProseMarkdown(markdown: string, definitions = ""): MdastNode {
+  const source = definitions ? markdown + "\n\n" + definitions : markdown;
+  const root = parseMarkdown(source) as unknown as MdastNode;
+  const definitionNodes = new Map<string, MdastNode>();
+  const visit = (node: MdastNode, callback: (node: MdastNode) => void): void => {
+    callback(node);
+    node.children?.forEach(child => visit(child, callback));
+  };
+  visit(root, node => {
+    if (node.type === "definition" && node.identifier) {
+      definitionNodes.set(node.identifier.toLowerCase(), node);
+    }
+  });
+  visit(root, node => {
+    if ((node.type === "linkReference" || node.type === "imageReference") && node.identifier) {
+      const definition = definitionNodes.get(node.identifier.toLowerCase());
+      if (definition) {
+        node.type = node.type === "linkReference" ? "link" : "image";
+        node.url = definition.url;
+        node.title = definition.title;
+      }
+    }
+  });
+  return root;
+}
+
+/**
+ * Collect source-authentic Markdown reference definitions from the complete document.
+ * The reader parses prose in separate spans around scientific blocks; supplying these
+ * definitions to each span lets references resolve across such a block.
+ */
+export function collectMarkdownDefinitions(source: string): string {
+  const root = parseProseMarkdown(source);
+  return (root.children ?? [])
+    .filter(node => node.type === "definition" && node.position)
+    .map(node => source.slice(node.position!.start.offset, node.position!.end.offset))
+    .join("\n\n");
+}
 const SUPPORTED_MATHMD_TYPES = new Set([
   "plot2d",
   "surface3d",
@@ -80,7 +142,7 @@ const SUPPORTED_MATHMD_TYPES = new Set([
 
 const VALID_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
 
-function extractRange(node: MdastNode): SourceRange {
+function extractRange(node: MarkdownNode): SourceRange {
   if (
     node.position &&
     typeof node.position.start?.line === "number" &&
@@ -1215,7 +1277,7 @@ export function parseMathMD(markdown: string): MathMDDocument {
   return parseMathMDWithMarkdown(markdown).document;
 }
 
-export function parseMathMDWithMarkdown(markdown: string): { document: MathMDDocument; root: MdastNode } {
+export function parseMathMDWithMarkdown(markdown: string): { document: MathMDDocument; root: MarkdownNode } {
   const { manifest, remainingMarkdown } = extractManifest(markdown);
   const root = parseMarkdown(remainingMarkdown);
   const mathmdNodes: MathMDNode[] = [];
@@ -1224,7 +1286,7 @@ export function parseMathMDWithMarkdown(markdown: string): { document: MathMDDoc
 
   let globalBlockOrdinal = 0;
 
-  function traverse(node: MdastNode): void {
+  function traverse(node: MarkdownNode): void {
     if (node.type === "code" && typeof node.lang === "string") {
       const type = node.lang.trim().toLowerCase();
       if (SUPPORTED_MATHMD_TYPES.has(type)) {

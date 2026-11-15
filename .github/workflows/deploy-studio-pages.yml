@@ -1,0 +1,81 @@
+name: Publicar BWJM Studio en GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      entry: ${{ steps.verify.outputs.entry }}
+    steps:
+      - name: Obtener el código de main
+        uses: actions/checkout@v4
+      - name: Preparar pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.15.0
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+      - name: Compilar Studio para el prefijo de GitHub Pages
+        env:
+          BWJM_BASE_PATH: /BWJM-WEB-/
+        run: pnpm build
+      - name: Comprobar que la compilación incluye el selector de imágenes VIS-06
+        id: verify
+        run: |
+          test -f apps/playground/dist/index.html
+          grep -q '/BWJM-WEB-/assets/' apps/playground/dist/index.html
+          grep -R -F -q 'Seleccionar imagen local' apps/playground/dist/assets
+          # Require the compact editor shipped with PR #9, not just the old VIS-06 picker.
+          grep -R -F -q 'imagen-integrada-' apps/playground/dist/assets
+          ENTRY=$(grep -oE '/BWJM-WEB-/assets/index-[^"]+\.js' apps/playground/dist/index.html | head -n 1)
+          test -n "$ENTRY"
+          echo "entry=$ENTRY" >> "$GITHUB_OUTPUT"
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+      - name: Subir la web compilada
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/playground/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publicar en GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verificar que la URL pública entrega la nueva versión
+        env:
+          ENTRY: ${{ needs.build.outputs.entry }}
+        run: |
+          for n in $(seq 1 24); do
+            HTML=$(curl -fsSL "https://blackwolfjm.github.io/BWJM-WEB-/?version=${{ github.sha }}" || true)
+            if printf '%s' "$HTML" | grep -Fq "$ENTRY"; then
+              echo "GitHub Pages está sirviendo el bundle actualizado: $ENTRY"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "GitHub Pages todavía no está entregando el bundle publicado: $ENTRY" >&2
+          exit 1

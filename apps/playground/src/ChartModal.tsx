@@ -216,9 +216,15 @@ export const ChartModal: React.FC<ChartModalProps> = ({ isOpen, documentVariable
           )}
           {kind === "flow2d" && <div className="bwjm-modal-grid">
             <ChartColorInput label="Color de las trayectorias" value={flowColor} onChange={setFlowColor} />
+            <p style={{ gridColumn: "1 / -1", color: "var(--text-muted)" }}>
+              Inserta un campo rotacional 2D con partículas que siguen sus líneas de corriente mediante RK4. Edita después el campo y las semillas directamente en el archivo.
+            </p>
           </div>}
           {kind === "crossproduct" && <div className="bwjm-modal-grid">
             <ChartColorInput label="Color del vector u" value={crossColor} onChange={setCrossColor} />
+            <p style={{ gridColumn: "1 / -1", color: "var(--text-muted)" }}>
+              Después de insertar, abre Personalizar gráfica para mover los vectores y cambiar las capas.
+            </p>
           </div>}
           {kind === "parametric2d" && (
             <div className="bwjm-modal-grid">

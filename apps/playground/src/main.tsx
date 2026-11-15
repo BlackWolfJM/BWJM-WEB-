@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore, ChangeEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { parseMarkdown, parseMathMDWithMarkdown } from "@mathmd/parser";
+import { MAX_LOCAL_IMAGE_BYTES, portableImageMarkdown, validateLocalRaster } from "./localImages.js";
+import { compactImageEditor } from "./compactImageEditor.js";
+import type { DocumentInsertSnapshot } from "./workspaceDocuments.js";
 import { MathMDCore } from "@mathmd/core";
 import { SVGRenderer } from "@mathmd/renderer-svg";
 import { PlotlyRenderer } from "@mathmd/renderer-plotly";
@@ -23,6 +26,7 @@ import type { CalculusVizResult, VectorStudyResult } from "@mathmd/math";
 import { SidebarLeft, OutlineItem, type SidebarTab } from "./SidebarLeft.js";
 import { Ribbon, type RibbonAction } from "./Ribbon.js";
 import { DocumentTabs } from "./DocumentTabs.js";
+import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
 import { createCrossProductDeterminant, createCrossProductEditor, createCrossProductReport } from "./CrossProductEditor.js";
 import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
 import { resetSurfaceColor, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
@@ -293,37 +297,41 @@ const SAMPLE_LESSONS: Record<string, { title: string; filename: string; content:
     filename: "area_riemann.bwjm",
     content: `# Área entre curvas y suma de Riemann
 
-Las curvas $f(x)=ax$ y $g(x)=x^2$ se cruzan en $x=0$ y $x=a$. Cambia $a$ para mover el cruce y $n$ para dividir la región en más rectángulos.
+Las curvas $f_a(x) = a\\cdot x$ y $g(x) = x^2$, con $a > 0$, se cruzan en $(0, 0)$ y $(a, a^2)$; la región encerrada está en $[0, a]$.
 
 $$
-A = \\int_0^a (ax-x^2)\\,dx = \\frac{a^3}{6}
+A(a) = \\int_0^a (a\\cdot x - x^2)\\,dx = \\frac{a^3}{6}
 $$
 
-\`\`\`slider
-name: a
-label: Cruce en x (a)
-min: 0.1
-max: 2
-step: 0.1
-default: 1
-\`\`\`
+**Cuando $a = 1$**, el resultado particular es **1/6**; para otros valores de $a$, la referencia cambia junto con la región. La suma de punto medio aproxima esta área usando $n$ rectángulos.
+
+## Parámetros de Riemann
 
 \`\`\`slider
 name: n
-label: Número de rectángulos (n)
 min: 2
 max: 50
 step: 1
 default: 10
 \`\`\`
 
+\`\`\`slider
+name: a
+min: 0.1
+max: 2
+step: 0.1
+default: 1
+\`\`\`
+
+## Ambas curvas, cruces y rectángulos en una escena
+
 \`\`\`calculusviz
-mode: riemann
-f: a * x
-g: x^2
+id: riemann-interactive
+mode: area-dx
 domain: [0, 2]
-upperBound: a
-partitions: n
+f: a*x
+g: x^2
+samples: 160
 \`\`\`
 `,
   },
@@ -504,7 +512,8 @@ export function BWJMStudio() {
   const {
     documents, activeId, markdown, filename, selectedTemplate, setMarkdown,
     openDocument, createDocument, selectDocument, closeDocument, markSaved, renameDocument,
-  } = useDocumentWorkspace("sin_titulo.bwjm", "");
+    insertAtDocumentSnapshot,
+  } = useDocumentWorkspace(SAMPLE_LESSONS.riemann.filename, SAMPLE_LESSONS.riemann.content, "riemann");
   const compactWorkspace = useSyncExternalStore(subscribeToCompactWorkspace, isCompactWorkspace);
   const [desktopView, setDesktopView] = useState<ViewMode>("split");
   const [compactView, setCompactView] = useState<Exclude<ViewMode, "split">>("reader");
@@ -535,7 +544,6 @@ export function BWJMStudio() {
       }
     }
   }, []); // Run only once on mount
-
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true);
   const [compactSidebarOpen, setCompactSidebarOpen] = useState(false);
   const [isSidebarLeftOpen, setIsSidebarLeftOpen] = compactWorkspace
@@ -556,6 +564,7 @@ export function BWJMStudio() {
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState<boolean>(false);
   const [isChartModalOpen, setIsChartModalOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
+  const [imageMessage, setImageMessage] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -570,7 +579,10 @@ export function BWJMStudio() {
   const openCrossProductStepsRef = useRef<Set<string>>(new Set());
   const playbackRef = useRef<InlinePlaybackController | null>(null);
   const liveAnalysisRef = useRef<(() => void) | null>(null);
+  const riemannUpdateRef = useRef<(() => void) | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageDestinationRef = useRef<DocumentInsertSnapshot | null>(null);
 
   useEffect(() => {
     if (compactSidebarVisible) {
@@ -585,6 +597,7 @@ export function BWJMStudio() {
     }
   };
 
+  const editorView = useMemo(() => compactImageEditor(markdown), [markdown]);
   const { document: doc, root: markdownRoot } = useMemo(() => parseMathMDWithMarkdown(markdown), [markdown]);
   const outline = useMemo(() => extractOutline(markdown), [markdown]);
   
@@ -598,8 +611,9 @@ export function BWJMStudio() {
     return clean ? clean.split(/\s+/).length : 0;
   }, [markdown]);
 
-  const charCount = markdown.length;
-  const lineCount = markdown.split("\n").length;
+  // The visual editor shows short image markers; keep source bytes in markdown.
+  const charCount = editorView.text.length;
+  const lineCount = editorView.text.split("\n").length;
 
   const clearTimers = () => {
     activeTimersRef.current.forEach((id) => window.clearInterval(id));
@@ -627,16 +641,20 @@ export function BWJMStudio() {
       setMarkdown((prev) => prev + prefix + suffix);
       return;
     }
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const start = editorView.toSourceOffset(textarea.selectionStart, "start");
+    const end = editorView.toSourceOffset(textarea.selectionEnd, "end");
     const selected = markdown.substring(start, end);
     const replacement = prefix + selected + suffix;
     const next = markdown.substring(0, start) + replacement + markdown.substring(end);
+    const nextEditor = compactImageEditor(next);
     setMarkdown(next);
     if (compactWorkspace) setViewMode("editor");
     setTimeout(() => {
       textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+      textarea.setSelectionRange(
+        nextEditor.toVisibleOffset(start + prefix.length, "start"),
+        nextEditor.toVisibleOffset(start + prefix.length + selected.length, "end"),
+      );
     }, 10);
   };
 
@@ -747,10 +765,92 @@ initialConditions:
     e.target.value = "";
   };
 
+  /** Validate both the file signature and browser decoding before embedding any bytes. */
+  const readLocalImageData = async (file: File): Promise<string> => {
+    if (file.size > MAX_LOCAL_IMAGE_BYTES) {
+      throw new Error("La imagen supera 3 MiB. Comprímela antes de insertarla.");
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const mime = validateLocalRaster(bytes, file.name, file.type);
+    const blob = new Blob([bytes], { type: mime });
+    try {
+      if (typeof window.createImageBitmap === "function") {
+        const bitmap = await window.createImageBitmap(blob);
+        bitmap.close();
+      } else {
+        await new Promise<void>((resolve, reject) => {
+          const url = URL.createObjectURL(blob);
+          const image = new Image();
+          image.onload = () => { URL.revokeObjectURL(url); resolve(); };
+          image.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("La imagen está corrupta o no se puede decodificar."));
+          };
+          image.src = url;
+        });
+      }
+    } catch {
+      throw new Error("La imagen está corrupta o no se puede decodificar.");
+    }
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === "string"
+        ? resolve(reader.result) : reject(new Error("La lectura de la imagen no produjo datos."));
+      reader.onerror = () => reject(new Error("No se pudo leer la imagen seleccionada."));
+      reader.onabort = () => reject(new Error("La lectura de la imagen fue cancelada."));
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const pickLocalImage = (): void => {
+    const input = imageFileInputRef.current;
+    if (!input) return;
+    const textarea = textareaRef.current;
+    const start = viewMode === "reader"
+      ? markdown.length
+      : editorView.toSourceOffset(Math.min(textarea?.selectionStart ?? editorView.text.length, editorView.text.length), "start");
+    const end = viewMode === "reader"
+      ? markdown.length
+      : editorView.toSourceOffset(Math.min(textarea?.selectionEnd ?? editorView.text.length, editorView.text.length), "end");
+    // The picker and FileReader are asynchronous. Never infer destination from the
+    // active tab once the dialog is closed.
+    imageDestinationRef.current = { documentId: activeId, content: markdown, start, end };
+    setImageMessage(null);
+    input.value = ""; // selecting the same file again must fire a change event
+    input.click();
+  };
+
+  const handleImageFile = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = event.target.files?.[0];
+    const target = imageDestinationRef.current;
+    imageDestinationRef.current = null;
+    event.target.value = "";
+    if (!file || !target) return; // Cancel never changes the document.
+    try {
+      const dataUrl = await readLocalImageData(file);
+      const markup = portableImageMarkdown(file.name, dataUrl);
+      const status = insertAtDocumentSnapshot(target, markup);
+      if (status === "inserted") {
+        setImageMessage("Imagen integrada en el documento original. Guárdalo para conservarla sin el archivo de origen.");
+      } else if (status === "too-large") {
+        setImageMessage("El documento superaría el límite de 12 MiB. Reduce la imagen o utiliza un documento más pequeño.");
+      } else if (status === "edited") {
+        setImageMessage("El documento se editó durante la lectura. No se insertó la imagen y se conservaron todos los cambios; inténtalo de nuevo.");
+      } else {
+        setImageMessage("La pestaña de destino se cerró o ya no admite la posición original. No se modificó ningún documento.");
+      }
+    } catch (error) {
+      setImageMessage(error instanceof Error ? error.message : "No se pudo insertar la imagen.");
+    }
+  };
+
   const handleNewDocument = () => createDocument();
 
   function openImageDialog() {
-    const caret = textareaRef.current?.selectionEnd ?? markdown.length;
+    const textarea = textareaRef.current;
+    const caret = textarea
+      ? editorView.toSourceOffset(Math.min(textarea.selectionEnd, editorView.text.length), "end")
+      : markdown.length;
     const block = markdownRoot.children?.find(node => node.position &&
       node.position.start.offset <= caret && caret <= node.position.end.offset);
     const offset = block?.position && block.type !== "paragraph" ? block.position.end.offset : caret;
@@ -770,10 +870,13 @@ initialConditions:
     setMarkdown(content);
     setImageTarget(undefined);
     setViewMode(compactWorkspace ? "reader" : "split");
-    if (!compactWorkspace) window.requestAnimationFrame(() => {
-      textareaRef.current?.setSelectionRange(cursor, cursor);
-      textareaRef.current?.focus();
-    });
+    if (!compactWorkspace) {
+      const visibleCursor = compactImageEditor(content).toVisibleOffset(cursor, "end");
+      window.requestAnimationFrame(() => {
+        textareaRef.current?.setSelectionRange(visibleCursor, visibleCursor);
+        textareaRef.current?.focus();
+      });
+    }
   }
 
   const handleExportHtml = () => {
@@ -822,7 +925,10 @@ initialConditions:
       }
       const selectHeading = () => {
         textarea.focus();
-        textarea.setSelectionRange(charIndex, charIndex + (lines[item.lineNumber - 1]?.length ?? 0));
+        textarea.setSelectionRange(
+          editorView.toVisibleOffset(charIndex, "start"),
+          editorView.toVisibleOffset(charIndex + (lines[item.lineNumber - 1]?.length ?? 0), "end"),
+        );
       };
       if (compactWorkspace) {
         setViewMode("editor");
@@ -847,7 +953,7 @@ initialConditions:
       const textarea = textareaRef.current;
       if (!textarea) return;
       textarea.focus();
-      textarea.setSelectionRange(start, end);
+      textarea.setSelectionRange(editorView.toVisibleOffset(start, "start"), editorView.toVisibleOffset(end, "end"));
       const row = markdown.slice(0, start).split("\n").length - 1;
       const lineHeight = parseFloat(window.getComputedStyle(textarea).lineHeight) || 23;
       textarea.scrollTop = Math.max(0, row * lineHeight - textarea.clientHeight / 3);
@@ -868,14 +974,14 @@ initialConditions:
       case "italic": insertAtCursor("*", "*"); break;
       case "code": insertAtCursor(String.fromCharCode(96), String.fromCharCode(96)); break;
       case "quote": insertAtCursor("> "); break;
-      case "list": insertAtCursor("- "); break;
+      case "list": insertAtCursor(markdown.slice(0, editorView.toSourceOffset(textareaRef.current?.selectionStart ?? editorView.text.length)).endsWith("\n") ? "- " : "\n\n- "); break;
       case "rule": insertAtCursor("\n\n---\n\n"); break;
       case "formula": setIsFormulaModalOpen(true); break;
       case "graph": setIsChartModalOpen(true); break;
       case "table":
         insertAtCursor("\n\n| Columna 1 | Columna 2 |\n|---|---|\n| Dato 1 | Dato 2 |\n\n");
         break;
-      case "picture": openImageDialog(); break;
+      case "picture": pickLocalImage(); break;
       case "equation": insertAtCursor("\n\n$$\n\\int_0^1 f(x)\\,dx\n$$\n\n"); break;
       case "inline-math": insertAtCursor("$", "$"); break;
       case "matrix": insertAtCursor("\n\n$$\n\\begin{bmatrix}a & b \\\\ c & d\\end{bmatrix}\n$$\n\n"); break;
@@ -912,6 +1018,12 @@ initialConditions:
       title: "Insertar tabla científica exportable",
       category: "Datos",
       action: () => insertAtCursor("\n\n```datatable\ncaption: Medición experimental\ncolumns: [Tiempo, Posición, Velocidad]\nunits: [s, m, m/s]\nrows:\n  - [0, 0, 0]\n  - [1, 1.5, 3]\n  - [2, 6, 6]\nprecision: 3\n```\n"),
+    },
+    {
+      id: "insert-image-modal",
+      title: "Insertar imagen con pie y ancho",
+      category: "Insertar",
+      action: openImageDialog,
     },
     {
       id: "insert-formula",
@@ -1039,6 +1151,7 @@ initialConditions:
   useEffect(() => {
     clearTimers();
     clearRenderers();
+    riemannUpdateRef.current = null;
 
     const previousVariables = coreRef.current?.getVariables() ?? {};
     const previousCore = coreRef.current;
@@ -1104,7 +1217,13 @@ initialConditions:
         renderedWidth = nextWidth;
         const nextHeight = Math.max(240, Math.round(nextWidth * height / width));
         renderer.resize(nextWidth, nextHeight);
-        renderer.render(coreRef.current?.getNodeData(node.id) ?? initialData);
+        if (node.type === "calculusviz" && node.id === RIEMANN_LESSON_ID) {
+          // Resizing must preserve the current partition, not restore the
+          // generic calculusviz output cached by MathMDCore.
+          riemannUpdateRef.current?.();
+        } else {
+          renderer.render(coreRef.current?.getNodeData(node.id) ?? initialData);
+        }
       });
       svgResizeObserver?.observe(mount);
     };
@@ -1450,7 +1569,7 @@ initialConditions:
               const addVectorInput = (key: "point" | "normal", labelText: string, defaultVal: number[]) => {
                 const input = document.createElement("input");
                 input.type = "text";
-                input.value = (node[key] ?? [0, 0, 0]).join(", ");
+                input.value = (node[key] ?? defaultVal).join(", ");
                 input.placeholder = "x, y, z";
                 input.setAttribute("aria-label", labelText);
                 input.onchange = () => {
@@ -1469,7 +1588,7 @@ initialConditions:
               const addPointInput = (key: "pointA" | "pointB" | "pointC", labelText: string, defaultVal: number[]) => {
                 const input = document.createElement("input");
                 input.type = "text";
-                input.value = (node[key] ?? [0, 0, 0]).join(", ");
+                input.value = (node[key] ?? defaultVal).join(", ");
                 input.placeholder = "x, y, z";
                 input.setAttribute("aria-label", labelText);
                 input.onchange = () => {
@@ -1489,7 +1608,7 @@ initialConditions:
               const addVectorInput = (key: "point" | "vectorU" | "vectorV", labelText: string, defaultVal: number[]) => {
                 const input = document.createElement("input");
                 input.type = "text";
-                input.value = (node[key] ?? [0, 0, 0]).join(", ");
+                input.value = (node[key] ?? defaultVal).join(", ");
                 input.placeholder = "x, y, z";
                 input.setAttribute("aria-label", labelText);
                 input.onchange = () => {
@@ -1832,6 +1951,22 @@ initialConditions:
         } else if (node.type === "flow2d" || node.type === "parametric2d") {
           mountSvg(cardBody, node, 720, 380);
         } else if (node.type === "calculusviz") {
+          if (node.id === RIEMANN_LESSON_ID && node.mode === "area-dx") {
+            const vars = coreRef.current.getVariables();
+            const initial = computeRiemannLesson(node, vars["a"] ?? 1, vars["n"] ?? 10);
+            mountSvg(cardBody, node, 760, 430, initial.scene);
+            const report = document.createElement("section");
+            updateRiemannLessonReport(report, initial.study);
+            cardBody.appendChild(report);
+            riemannUpdateRef.current = () => {
+              const current = coreRef.current?.getVariables();
+              const renderer = svgRenderersRef.current.get(node.id);
+              if (!current || !renderer) return;
+              const view = computeRiemannLesson(node, current["a"] ?? 1, current["n"] ?? 10);
+              renderer.render(view.scene);
+              updateRiemannLessonReport(report, view.study);
+            };
+          } else {
           const data = coreRef.current.getNodeData(node.id);
           if (node.mode === "revolution") {
             const mount = document.createElement("div");
@@ -1848,6 +1983,7 @@ initialConditions:
           report.className = "bwjm-calculus-report";
           updateCalculusReport(report, data);
           cardBody.appendChild(report);
+          }
         } else if (node.type === "plot2d") {
           mountSvg(cardBody, node, 720, 360);
         } else if (node.type === "vector2d" || node.type === "vector3d") {
@@ -2374,6 +2510,9 @@ initialConditions:
       }
     });
 
+    if (name === "a" || name === "n") {
+      riemannUpdateRef.current?.();
+    }
     if (liveAnalysisRef.current) {
       liveAnalysisRef.current();
     }
@@ -2391,6 +2530,14 @@ initialConditions:
         accept=".bwjm,.jm,.md,.txt"
         style={{ display: "none" }}
         onChange={handleOpenFile}
+      />
+      <input
+        ref={imageFileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+        aria-label="Seleccionar imagen local"
+        style={{ display: "none" }}
+        onChange={handleImageFile}
       />
 
       <header className="bwjm-studio-header">
@@ -2415,6 +2562,7 @@ initialConditions:
       <Ribbon activeView={viewMode} compactWorkspace={compactWorkspace} onAction={handleRibbonAction}
         theme={theme} onThemeChange={setTheme}
         collapsed={isRibbonCollapsed} onCollapseChange={setIsRibbonCollapsed}/>
+      {imageMessage && <div className="bwjm-image-notice" role="status">{imageMessage}</div>}
 
       {compactWorkspace && (
         <div ref={compactViewRef} className="bwjm-compact-view" role="group" aria-label="Vista del documento">
@@ -2463,8 +2611,9 @@ initialConditions:
             <textarea
               ref={textareaRef}
               className="bwjm-code-textarea"
-              value={markdown}
-              onChange={(e) => setMarkdown(e.target.value)}
+              value={editorView.text}
+              onChange={(e) => setMarkdown(editorView.restoreSource(e.target.value))}
+              aria-label="Editor del documento, imágenes embebidas con referencias cortas"
               onKeyDown={event => {
                 if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
                   event.key.toLowerCase() === "b") {

@@ -54,6 +54,13 @@ agency-agents-clone.txt
 /docs/requirements/
 /docs/INVENTARIO_HERRAMIENTAS_*.md
 
+# Local planning kits and prompts
+/PROMPT_*.md
+/BWJM_Kit_*/
+/BWJM_Kit_*.zip
+/BWJM_Todas_las_Tareas_*.md
+/docs/requirements/
+
 # Environment and logs
 *.log
 .env
