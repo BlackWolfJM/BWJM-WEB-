@@ -283,7 +283,7 @@ async function documentSidebarSmoke() {
   await visit(page);
   const sidebar = page.locator("#bwjm-document-sidebar");
   await sidebar.waitFor();
-  assert(await sidebar.classList().then(classes => classes.includes("bwjm-sidebar-mode-expanded")));
+  assert((await sidebar.getAttribute("class")).includes("bwjm-sidebar-mode-expanded"));
   assert.equal(await page.getByRole("tab", { name: "Lecciones", exact: true }).count(), 0);
   await openText(page, "estructura.bwjm", "# Introducción\n\n## Método\n\n# Resultados");
   const search = page.getByRole("searchbox", { name: "Filtrar esquema" });
