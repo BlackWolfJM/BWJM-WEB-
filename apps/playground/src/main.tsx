@@ -513,7 +513,7 @@ export function BWJMStudio() {
     documents, activeId, markdown, filename, selectedTemplate, setMarkdown,
     openDocument, createDocument, selectDocument, closeDocument, markSaved, renameDocument,
     insertAtDocumentSnapshot,
-  } = useDocumentWorkspace(SAMPLE_LESSONS.riemann.filename, SAMPLE_LESSONS.riemann.content, "riemann");
+  } = useDocumentWorkspace("sin_titulo.bwjm", "");
   const compactWorkspace = useSyncExternalStore(subscribeToCompactWorkspace, isCompactWorkspace);
   const [desktopView, setDesktopView] = useState<ViewMode>("split");
   const [compactView, setCompactView] = useState<Exclude<ViewMode, "split">>("reader");
