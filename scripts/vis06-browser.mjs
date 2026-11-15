@@ -276,6 +276,59 @@ async function pickerErrors() {
   await ctx.close();
 }
 
+
+async function documentSidebarSmoke() {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 850 } });
+  const page = await ctx.newPage();
+  await visit(page);
+  const sidebar = page.locator("#bwjm-document-sidebar");
+  await sidebar.waitFor();
+  assert(await sidebar.classList().then(classes => classes.includes("bwjm-sidebar-mode-expanded")));
+  assert.equal(await page.getByRole("tab", { name: "Lecciones", exact: true }).count(), 0);
+  await openText(page, "estructura.bwjm", "# Introducción\n\n## Método\n\n# Resultados");
+  const search = page.getByRole("searchbox", { name: "Filtrar esquema" });
+  await search.fill("Método");
+  assert.equal(await sidebar.locator(".bwjm-outline-item").count(), 1,
+    "Filtering should leave only matching headings");
+  await search.fill("");
+
+  await page.getByRole("button", { name: "Colapsar panel del documento" }).click();
+  assert((await sidebar.getAttribute("class")).includes("bwjm-sidebar-mode-collapsed"));
+  await sidebar.getByRole("tab", { name: "Variables" }).click();
+  assert((await sidebar.getAttribute("class")).includes("bwjm-sidebar-mode-expanded"),
+    "Choosing a rail icon should expand its panel");
+  await page.getByRole("button", { name: "Ocultar panel del documento" }).click();
+  assert.equal(await page.locator("#bwjm-document-sidebar").count(), 0);
+  await page.reload();
+  await page.getByRole("button", { name: "Mostrar panel del documento" }).waitFor();
+  assert.equal(await page.locator("#bwjm-document-sidebar").count(), 0,
+    "Hidden preference should survive a reload");
+  await page.getByRole("button", { name: "Mostrar panel del documento" }).click();
+  await page.locator("#bwjm-document-sidebar.bwjm-sidebar-mode-expanded").waitFor();
+  await page.keyboard.press("Control+Backslash");
+  await page.getByRole("button", { name: "Mostrar panel del documento" }).waitFor();
+  await page.keyboard.press("Control+Backslash");
+  await page.locator("#bwjm-document-sidebar.bwjm-sidebar-mode-expanded").waitFor();
+
+  await page.getByRole("tab", { name: "Archivo" }).click();
+  await page.getByRole("button", { name: "Abrir ejemplo" }).click();
+  const example = page.locator(".bwjm-palette-title").filter({ hasText: "Área entre Curvas" });
+  await example.click();
+  await page.waitForFunction(() => document.querySelector(".bwjm-code-textarea")?.value.includes("Área entre curvas"));
+  await ctx.close();
+
+  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+  const narrow = await mobile.newPage();
+  await visit(narrow);
+  await narrow.getByRole("button", { name: "Mostrar panel del documento" }).click();
+  await narrow.locator("#bwjm-document-sidebar.bwjm-sidebar-mode-expanded").waitFor();
+  await narrow.getByRole("tab", { name: "Inspector" }).click();
+  await narrow.getByRole("button", { name: "Ocultar panel del documento" }).click();
+  assert.equal(await narrow.locator("#bwjm-document-sidebar").count(), 0);
+  await mobile.close();
+  console.log("Document sidebar browser OK: filter, collapsed rail, hidden preference, shortcut, examples, mobile drawer.");
+}
+
 async function formulaComposerSmoke() {
   const context = await browser.newContext({ viewport: { width: 1280, height: 850 } });
   const page = await context.newPage();
@@ -313,6 +366,7 @@ try {
   await portableRun("jm");
   await pickerErrors();
   await formulaComposerSmoke();
+  await documentSidebarSmoke();
   console.log("VIS-06 navegador: OK (390px y 1280px, cancelación, corrupto, tamaño, pestaña, guardado/reapertura).");
 } finally {
   if (browser) await browser.close();
