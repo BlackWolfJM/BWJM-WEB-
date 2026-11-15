@@ -1,4 +1,4 @@
-import { MathMDDocument, MathMDNode, type GraphParameter } from "@mathmd/ast";
+import { MathMDDocument, MathMDNode, type GraphParameter, type CrossProductNode, DocumentManifest } from "@mathmd/ast";
 import { 
   compileExpression, 
   evaluateExpression, 
@@ -12,10 +12,17 @@ import {
   sampleParametric2D,
   sampleFlow2D,
   computeCalculusViz,
+  computeCrossProductScene,
+  computeCrossProductStudy,
+  describeCrossProductDeterminant,
+  computeParallelepipedVolume,
+  computeCollapseStudy,
+  interpolateCollapseVector,
+  isFiniteVector,
   extractFreeParameters,
   computeVectorStudy
 } from "@mathmd/math";
-import type { Vector3D } from "@mathmd/math";
+import type { Vector3D, ParallelepipedVolumeInfo, CollapseStudy } from "@mathmd/math";
 
 export class MathMDCore {
   private document: MathMDDocument;
@@ -29,8 +36,42 @@ export class MathMDCore {
   constructor(document: MathMDDocument) {
     this.document = document;
     this.initialize();
+    this.applyManifest();
   }
   
+  /** Returns the document manifest if present */
+  getManifest(): DocumentManifest | undefined {
+    return this.document.manifest;
+  }
+
+  /** Applies initial conditions from manifest to restore exact document state */
+  private applyManifest(): void {
+    const manifest = this.document.manifest;
+    if (!manifest?.initialConditions) return;
+
+    // Restore graph parameters
+    if (manifest.initialConditions.graphParameters) {
+      for (const [nodeId, params] of Object.entries(manifest.initialConditions.graphParameters)) {
+        if (this.localParameters.has(nodeId)) {
+          for (const [name, value] of Object.entries(params)) {
+            this.localParameters.get(nodeId)?.set(name, value);
+          }
+        }
+      }
+    }
+
+    // Restore timeline positions
+    if (manifest.initialConditions.timelinePositions) {
+      for (const [name, value] of Object.entries(manifest.initialConditions.timelinePositions)) {
+        if (this.variables.has(name)) {
+          this.variables.set(name, value);
+        }
+      }
+    }
+
+    // Camera state would be applied by the renderer when scene is created
+  }
+
   private initialize() {
     this.document.children.forEach(node => {
       if ("paramControls" in node && node.paramControls?.enabled) {
@@ -206,6 +247,10 @@ export class MathMDCore {
           node.f, node.g, node.integrand, node.paramX, node.paramY,
           node.fieldP, node.fieldQ, node.reverseLower, node.reverseUpper,
         ].forEach(expression => { if(expression) deps.push(...extractVarsFromStr(expression)); });
+        if (node.mode === "riemann") {
+          if (typeof node.partitions === "string") deps.push(node.partitions);
+          if (node.upperBound) deps.push(node.upperBound);
+        }
         break;
       }
       case "flow2d": {
@@ -483,6 +528,34 @@ export class MathMDCore {
         } catch (error) {
           return { ...data, error: error instanceof Error ? error.message : String(error) };
         }
+      }
+
+      case "crossproduct": {
+        const crossNode = node as CrossProductNode;
+        const crossStudy = crossNode.showSteps !== undefined
+          ? computeCrossProductStudy(crossNode.u, crossNode.v, crossNode.reverseOrder, crossNode.showSteps && crossNode.showDeterminant, crossNode.w, crossNode.showIdentities, crossNode.origin)
+          : undefined;
+        
+        // Manejo de animación de colapso
+        let effectiveW = crossNode.w;
+        let collapseInfo: CollapseStudy | undefined;
+        if (crossNode.w && crossNode.showCollapse && crossNode.collapseFactor !== undefined) {
+          const factor = Math.max(0, Math.min(1, crossNode.collapseFactor));
+          const target = crossNode.collapseTarget ?? "coplanar";
+          collapseInfo = computeCollapseStudy(crossNode.u, crossNode.v, crossNode.w, factor, target);
+          effectiveW = collapseInfo.currentW;
+        }
+        
+        const crossScene = crossStudy?.scene ?? computeCrossProductScene(crossNode.u, crossNode.v, crossNode.reverseOrder, effectiveW, crossNode.origin);
+        const crossDeterminant = crossNode.showDeterminant
+          ? describeCrossProductDeterminant(crossNode.u, crossNode.v, crossScene, crossNode.reverseOrder)
+          : undefined;
+        const volumeInfo = effectiveW && crossNode.showVolume !== false
+          ? (isFiniteVector(effectiveW, 3)
+              ? computeParallelepipedVolume(crossNode.u, crossNode.v, effectiveW)
+              : undefined)
+          : undefined;
+        return { ...node, crossScene, crossStudy, crossDeterminant, volumeInfo, collapseInfo, effectiveW };
       }
 
       case "curve3d": {

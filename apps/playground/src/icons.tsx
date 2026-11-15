@@ -70,6 +70,31 @@ export const IconFunction: React.FC<{ size?: number; className?: string }> = ({ 
   </svg>
 );
 
+export const IconEquation: React.FC<{ size?: number; className?: string }> = ({ size = 16, className = "" }) => (
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m2 8 5 7m0-7-5 7m8-5.5h4m-4 4h4m3-5.5 2.5 5m2.5-5-5 10" />
+  </svg>
+);
+
+export const IconInlineMath: React.FC<{ size?: number; className?: string }> = ({ size = 16, className = "" }) => (
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="m4 10 7 10m0-10-7 10M15 6a2.5 2.5 0 0 1 5 .5c0 2-5 3.5-5 5.5h5" />
+  </svg>
+);
+
+export const IconMatrix: React.FC<{ size?: number; className?: string }> = ({ size = 16, className = "" }) => (
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M6 4H3v16h3m12-16h3v16h-3" />
+    <path d="M8 8h2.5v2.5H8zM13.5 8H16v2.5h-2.5zM8 13.5h2.5V16H8zM13.5 13.5H16V16h-2.5z" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+export const IconIntegral: React.FC<{ size?: number; className?: string }> = ({ size = 16, className = "" }) => (
+  <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M18 3.5C16.5 2 13.9 2.9 13.4 6l-2.8 12c-.5 3.1-3.1 4-4.6 2.5" />
+  </svg>
+);
+
 export const IconBarChart: React.FC<{ size?: number; className?: string }> = ({ size = 16, className = "" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <line x1="18" y1="20" x2="18" y2="10" />

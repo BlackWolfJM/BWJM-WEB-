@@ -44,6 +44,7 @@ describe("multi-document studio workspace", () => {
     expect(state.activeId).toBe(first);
     state = closeWorkspaceDocument(state,first);
     expect(state.documents.length).toBe(1);
+    expect(state.documents[0]).toMatchObject({ filename: "sin_titulo.bwjm", content: "", savedContent: "" });
   });
 });
 describe("Word-like scientific ribbon and document search", () => {
@@ -111,8 +112,10 @@ describe("compact, non-duplicated chart animation UI", () => {
   it("mounts playback only when an eligible curve or surface is animated", () => {
     expect(supportsInlinePlayback({ type: "curve3d", animated: true })).toBe(true);
     expect(supportsInlinePlayback({ type: "curve3d", animated: false })).toBe(false);
-    expect(supportsInlinePlayback({ type: "surface3d", animated: true })).toBe(true);
+    expect(supportsInlinePlayback({ type: "surface3d", equation: "x + t", animated: true })).toBe(true);
+    expect(supportsInlinePlayback({ type: "surface3d", equation: "sqrt(x^2 + y^2)", animated: true })).toBe(false);
     expect(supportsInlinePlayback({ type: "surface3d", animated: false })).toBe(false);
+    expect(supportsInlinePlayback({ type: "flow2d", showParticles: false })).toBe(false);
   });
   it("keeps the legacy animated 2D trajectory playable until explicitly made static", () => {
     expect(supportsInlinePlayback({ type: "parametric2d" })).toBe(true);

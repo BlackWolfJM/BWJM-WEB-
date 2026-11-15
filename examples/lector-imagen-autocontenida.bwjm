@@ -1,0 +1,24 @@
+# Lector e imagen autocontenida
+
+La imagen viaja con este documento.
+
+![Píxel verde de prueba][bwjm-imagen-1]
+
+| Magnitud | Valor |
+| --- | ---: |
+| Área | $1$ |
+
+1. Abrir el documento en Studio.
+2. Guardar una copia en otra carpeta.
+   - La imagen se conserva al reabrirla.
+
+---
+
+```plot2d
+equation: x^2
+x: [-2, 2]
+```
+
+Consulta la [guía Markdown](https://commonmark.org/help/).
+
+[bwjm-imagen-1]: data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGPgndIBAAHbASoDVGnEAAAAAElFTkSuQmCC#width=64 "Píxel de prueba incrustado en el documento."

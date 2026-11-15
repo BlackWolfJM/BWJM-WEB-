@@ -45,25 +45,18 @@ export const FormulaModal: React.FC<FormulaModalProps> = ({ isOpen, onClose, onI
 
   useEffect(() => {
     if (!isOpen) return;
-    if (typeof window !== "undefined" && window.katex) {
-      try {
-        const rendered = window.katex.renderToString(latex.trim() || "\\text{...}", {
-          displayMode: mode !== "inline",
-          throwOnError: true,
-        });
-        setPreviewHtml(rendered);
-        setHasError(false);
-      } catch {
-        setHasError(true);
-        setPreviewHtml(`<span class="bwjm-modal-error">Error de sintaxis LaTeX</span>`);
-      }
-    } else {
-      setPreviewHtml(`<code>${latex}</code>`);
+    try {
+      const rendered = window.katex.renderToString(latex.trim() || "\\text{...}", {
+        displayMode: mode !== "inline",
+        throwOnError: true,
+      });
+      setPreviewHtml(rendered);
       setHasError(false);
+    } catch {
+      setHasError(true);
+      setPreviewHtml(`<span class="bwjm-modal-error">Error de sintaxis LaTeX</span>`);
     }
   }, [latex, mode, isOpen]);
-
-  if (!isOpen) return null;
 
   const handleApplyTemplate = (snippet: string) => {
     setLatex((prev) => (prev.trim().length === 0 ? snippet : `${prev} ${snippet}`));
@@ -185,6 +178,9 @@ export const FormulaModal: React.FC<FormulaModalProps> = ({ isOpen, onClose, onI
             <label className="bwjm-modal-label">Vista Previa KaTeX</label>
             <div
               className="bwjm-modal-preview-box"
+              role="region"
+              aria-label="Vista previa de la fórmula"
+              tabIndex={0}
               dangerouslySetInnerHTML={{ __html: previewHtml }}
             />
           </div>

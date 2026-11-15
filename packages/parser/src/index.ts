@@ -1,18 +1,21 @@
-import { unified } from "unified";
-import remarkParse from "remark-parse";
-import remarkGfm from "remark-gfm";
-import remarkMath from "remark-math";
+import { parseMarkdown, type MarkdownNode as MdastNode } from "./markdown.js";
+export { parseMarkdown, type MarkdownNode } from "./markdown.js";
 import YAML from "yaml";
+import { normalizeDomainLimits, parseDomainLimit } from "./domainLimit.js";
+export { parseDomainLimit } from "./domainLimit.js";
 import {
   MathMDDocument,
   MathMDNode,
   MathMDDiagnostic,
   SourceRange,
   generateID,
+  DocumentManifest,
+  documentManifestSchema,
   plot2dSchema,
   surface3dSchema,
   vector2dSchema,
   vector3dSchema,
+  crossProductSchema,
   curve3dSchema,
   vectorfield2dSchema,
   gradientSchema,
@@ -41,24 +44,12 @@ import {
   calculusVizSchema,
 } from "@mathmd/ast";
 
-interface MdastPosition {
-  start: { line: number; column: number; offset: number };
-  end: { line: number; column: number; offset: number };
-}
-
-interface MdastNode {
-  type: string;
-  lang?: string | null;
-  value?: string;
-  position?: MdastPosition;
-  children?: MdastNode[];
-}
-
 const SUPPORTED_MATHMD_TYPES = new Set([
   "plot2d",
   "surface3d",
   "vector2d",
   "vector3d",
+  "crossproduct",
   "curve3d",
   "vectorfield2d",
   "gradient",
@@ -248,6 +239,7 @@ function buildMathMDNode(
         yDomain: "y" in data ? data.y : "yDomain" in data ? data.yDomain : [-5, 5],
         samples,
         contours: "contours" in data ? data.contours : false,
+        contourColor: data.contourColor,
         animated: data.animated,
         showInfo: data.showInfo,
         color: typeof data.color === "string" ? data.color : undefined,
@@ -335,6 +327,23 @@ function buildMathMDNode(
       return result.data;
     }
 
+    case "crossproduct": {
+      const result = crossProductSchema.safeParse({ ...data, ...base });
+      if (result.success) return result.data;
+      for (const issue of result.error.issues) {
+        diagnostics.push({
+          severity: "error",
+          code: "MATHMD_SCHEMA_INVALID",
+          message: issue.message,
+          range,
+          blockType: type,
+          blockId: id,
+          path: issue.path,
+        });
+      }
+      return null;
+    }
+
     case "curve3d": {
       payload = {
         ...base,
@@ -342,7 +351,7 @@ function buildMathMDNode(
         paramControls: data.paramControls,
         y: "y" in data ? data.y : "sin(t)",
         z: "z" in data ? data.z : "t",
-        tDomain: "t" in data ? data.t : "tDomain" in data ? data.tDomain : [0, 2 * Math.PI],
+        tDomain: normalizeDomainLimits("t" in data ? data.t : "tDomain" in data ? data.tDomain : [0, 2 * Math.PI]),
         animated: data.animated,
         showVectors: data.showVectors,
         showTNB: data.showTNB,
@@ -484,6 +493,7 @@ function buildMathMDNode(
       payload = {
         ...base,
         name: data.name,
+        label: data.label,
         min: minVal,
         max: maxVal,
         step: stepVal,
@@ -927,6 +937,9 @@ function buildMathMDNode(
         mode: data.mode,
         paramControls: data.paramControls,
         domain: data.domain ?? [0, 1],
+        partitions: data.partitions,
+        upperBound: data.upperBound,
+        color: data.color,
         f: asExpression(data.f), g: asExpression(data.g), integrand: asExpression(data.integrand),
         paramX: asExpression(data.paramX), paramY: asExpression(data.paramY),
         fieldP: asExpression(data.fieldP), fieldQ: asExpression(data.fieldQ),
@@ -949,7 +962,7 @@ function buildMathMDNode(
       const node = parsed.data;
       // Parse-level semantic checks must reject unsupported combinations, not merely warn.
       const requiresFG = ["area-dx", "area-dy", "area-pieces", "area-polar",
-        "double-region", "change-order", "double-polar", "revolution"];
+        "double-region", "change-order", "double-polar", "revolution", "riemann"];
       const invalid = (requiresFG.includes(node.mode) && (!node.f || !node.g))
         || (["area-parametric", "green"].includes(node.mode) && (!node.paramX || !node.paramY))
         || (node.mode === "green" && (!node.fieldP || !node.fieldQ))
@@ -999,7 +1012,7 @@ function buildMathMDNode(
       const payload = { ...base,
         x: data.x, y: data.y,
         paramControls: data.paramControls,
-        tDomain: data.tDomain ?? data.t ?? [0, 2 * Math.PI],
+        tDomain: normalizeDomainLimits(data.tDomain ?? data.t ?? [0, 2 * Math.PI]),
         samples: data.samples ?? 200,
         timelineRef: data.timelineRef,
         color: data.color,
@@ -1118,8 +1131,9 @@ function buildMathMDNode(
 
     case "timeline": {
       const timelineData = data as Record<string, unknown>;
-      const minVal = "min" in data ? data.min : "domain" in timelineData ? (timelineData.domain as [number, number])[0] : 0;
-      const maxVal = "max" in data ? data.max : "domain" in timelineData ? (timelineData.domain as [number, number])[1] : 2 * Math.PI;
+      const limits = Array.isArray(timelineData.domain) ? timelineData.domain : undefined;
+      const minVal = "min" in data ? data.min : "domain" in timelineData ? limits?.[0] : 0;
+      const maxVal = "max" in data ? data.max : "domain" in timelineData ? limits?.[1] : 2 * Math.PI;
       const defaultVal = "default" in data ? data.default : minVal;
       const speedVal = "speed" in data ? data.speed : 1.0;
       const loopVal = "loop" in data ? data.loop : true;
@@ -1129,8 +1143,8 @@ function buildMathMDNode(
       payload = {
         ...base,
         name: data.name,
-        domain: [minVal, maxVal] as [number, number],
-        default: defaultVal,
+        domain: normalizeDomainLimits([minVal, maxVal]),
+        default: parseDomainLimit(defaultVal) ?? defaultVal,
         speed: speedVal,
         loop: loopVal,
         autoplay: autoplayVal,
@@ -1165,8 +1179,45 @@ function buildMathMDNode(
  * Preserves the exact Markdown source, extracts fence ranges, generates deterministic IDs,
  * detects duplicates, and collects structured diagnostics without modifying unrelated Markdown.
  */
+/**
+ * Extracts the document manifest from a YAML front-matter block at the start of the markdown.
+ * Expected format:
+ * ```manifest
+ * manifestVersion: 1
+ * engineVersion: "0.1.0"
+ * createdAt: "2026-01-15T10:30:00.000Z"
+ * updatedAt: "2026-01-15T10:30:00.000Z"
+ * initialConditions: ...
+ * ```
+ */
+function extractManifest(markdown: string): { manifest: DocumentManifest | undefined; remainingMarkdown: string } {
+  const frontMatterMatch = markdown.match(/^```manifest\n([\s\S]*?)\n```/);
+  if (!frontMatterMatch) {
+    return { manifest: undefined, remainingMarkdown: markdown };
+  }
+
+  try {
+    const yamlContent = frontMatterMatch[1];
+    const parsed = YAML.parse(yamlContent);
+    const result = documentManifestSchema.safeParse(parsed);
+    if (result.success) {
+      // Remove the manifest block from the markdown
+      const remaining = markdown.slice(frontMatterMatch[0].length).trimStart();
+      return { manifest: result.data, remainingMarkdown: remaining };
+    }
+  } catch {
+    // Ignore parse errors, treat as no manifest
+  }
+  return { manifest: undefined, remainingMarkdown: markdown };
+}
+
 export function parseMathMD(markdown: string): MathMDDocument {
-  const root = unified().use(remarkParse).use(remarkGfm).use(remarkMath).parse(markdown) as unknown as MdastNode;
+  return parseMathMDWithMarkdown(markdown).document;
+}
+
+export function parseMathMDWithMarkdown(markdown: string): { document: MathMDDocument; root: MdastNode } {
+  const { manifest, remainingMarkdown } = extractManifest(markdown);
+  const root = parseMarkdown(remainingMarkdown);
   const mathmdNodes: MathMDNode[] = [];
   const diagnostics: MathMDDiagnostic[] = [];
   const seenIds = new Set<string>();
@@ -1245,12 +1296,13 @@ export function parseMathMD(markdown: string): MathMDDocument {
 
   traverse(root);
 
-  return {
+  return { root, document: {
     type: "document",
     source: markdown,
     children: mathmdNodes,
     diagnostics,
-  };
+    manifest,
+  } };
 }
 
 export default { parseMathMD };

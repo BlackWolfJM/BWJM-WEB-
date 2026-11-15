@@ -25,6 +25,41 @@ export interface MathMDDiagnostic {
   path?: ReadonlyArray<string | number>;
 }
 
+/**
+ * Document Manifest for reproducible scientific documents.
+ * Stores initial conditions, engine version, and state for exact reopening.
+ */
+export interface DocumentManifest {
+  /** Manifest schema version for migrations */
+  manifestVersion: 1;
+  /** MathMD engine version that created this document */
+  engineVersion: string;
+  /** ISO timestamp of creation */
+  createdAt: string;
+  /** ISO timestamp of last modification */
+  updatedAt: string;
+  /** Initial conditions for reproducible graphs */
+  initialConditions?: {
+    /** Parameter values for graphs at creation time */
+    graphParameters?: Record<string, Record<string, number>>;
+    /** Camera state for 3D scenes */
+    cameraState?: Record<string, CameraState>;
+    /** Timeline positions */
+    timelinePositions?: Record<string, number>;
+  };
+  /** Schema version for node validation */
+  schemaVersion?: string;
+}
+
+/** Camera state for 3D scene reproducibility */
+export interface CameraState {
+  position: [number, number, number];
+  target: [number, number, number];
+  up: [number, number, number];
+  fov?: number;
+  projection?: "perspective" | "orthographic";
+}
+
 export interface MathMDNodeBase {
   id: string;
   range: SourceRange;
@@ -35,6 +70,8 @@ export interface MathMDDocument {
   source: string;
   children: MathMDNode[];
   diagnostics: MathMDDiagnostic[];
+  /** Optional manifest for reproducible document reopening */
+  manifest?: DocumentManifest;
 }
 
 // --- Specific AST Nodes ---
@@ -76,6 +113,7 @@ export interface Surface3DNode extends MathMDNodeBase {
   yDomain: [number, number];
   samples?: number;
   contours?: boolean;
+  contourColor?: string;
   /** Controls whether a time-dependent surface is animated by the t timeline. */
   animated?: boolean;
   /** Optional document analysis; never required to plot a surface. */
@@ -154,9 +192,314 @@ export interface TangentPlaneNode extends MathMDNodeBase {
   color?: string;
 }
 
+/**
+ * Nodo para visualización del producto cruz u×v en R^3.
+ * Muestra dos vectores u, v, el plano que generan y la normal orientada u×v.
+ * También puede calcular el área del paralelogramo |u×v| y detector de paralelismo.
+ * Con w opcional, muestra el volumen del paralelepípedo y el producto triple escalar.
+ * Con collapseFactor, anima el colapso del paralelepípedo interpolando w.
+ * Con showSignChallenge, muestra un ejercicio interactivo de signos.
+ */
+export interface CrossProductNode extends MathMDNodeBase {
+  type: "crossproduct";
+  u: [number, number, number];
+  v: [number, number, number];
+  w?: [number, number, number];
+  origin?: [number, number, number];
+  showPlane?: boolean;
+  showNormal?: boolean;
+  showArea?: boolean;
+  showTriangle?: boolean;
+  showVolume?: boolean;
+  showSteps?: boolean;
+  reverseOrder?: boolean;
+  showDeterminant?: boolean;
+  showRightHand?: boolean;
+  showAnticommutative?: boolean;
+  showDistributive?: boolean;
+  showIdentities?: boolean;
+  showCollapse?: boolean;
+  collapseFactor?: number;
+  collapseTarget?: "zero" | "coplanar";
+  showSignChallenge?: boolean;
+  signChallengeMode?: "random" | "fixed" | "quiz";
+  signChallengeSeed?: number;
+  colorU?: string;
+  colorNormal?: string;
+  colorPlane?: string;
+  colorTriangle?: string;
+  colorVolume?: string;
+  planeOpacity?: number;
+  labelU?: string;
+  labelV?: string;
+  labelW?: string;
+  labelNormal?: string;
+}
+
+/**
+ * Nodo para recta 3D en forma vectorial: r(t) = P + t·v
+ * P = point (punto de paso), v = direction (vector director)
+ */
+export interface Line3DNode extends MathMDNodeBase {
+  type: "line3d";
+  point: [number, number, number];
+  direction: [number, number, number];
+  tDomain?: [number, number];
+  showPoint?: boolean;
+  showDirection?: boolean;
+  showSegment?: boolean;
+  segmentT?: [number, number];
+  color?: string;
+  colorPoint?: string;
+  colorDirection?: string;
+  labelPoint?: string;
+  labelDirection?: string;
+  label?: string;
+  paramName?: string;
+}
+
+/**
+ * Nodo para plano 3D con múltiples formas de definición:
+ * - point-normal: n·(X - P) = 0 (punto + normal)
+ * - three-points: 3 puntos no colineales A, B, C → n = (B-A)×(C-A)
+ * - point-vectors: punto P + 2 vectores u, v → n = u×v
+ * - parametric: X = P + s·u + t·v (parametrización)
+ * - general: Ax + By + Cz + D = 0 (ecuación general)
+ */
+export type Plane3DMode = "point-normal" | "three-points" | "point-vectors" | "parametric" | "general";
+
+export interface Plane3DNode extends MathMDNodeBase {
+  type: "plane3d";
+  mode?: Plane3DMode;
+  
+  // point-normal (default)
+  point?: [number, number, number];
+  normal?: [number, number, number];
+  
+  // three-points
+  pointA?: [number, number, number];
+  pointB?: [number, number, number];
+  pointC?: [number, number, number];
+  
+  // point-vectors / parametric
+  vectorU?: [number, number, number];
+  vectorV?: [number, number, number];
+  
+  // general: Ax + By + Cz + D = 0
+  A?: number;
+  B?: number;
+  C?: number;
+  D?: number;
+  
+  xDomain?: [number, number];
+  yDomain?: [number, number];
+  showPoint?: boolean;
+  showNormal?: boolean;
+  showIntercepts?: boolean;
+  color?: string;
+  colorPoint?: string;
+  colorNormal?: string;
+  opacity?: number;
+  labelPoint?: string;
+  labelNormal?: string;
+  labelU?: string;
+  labelV?: string;
+  label?: string;
+}
+
+/**
+ * Nodo para visualización del ángulo entre dos rectas 3D.
+ * Muestra dos rectas con sus vectores directores y el arco del ángulo menor.
+ */
+export interface AngleBetweenLinesNode extends MathMDNodeBase {
+  type: "anglebetweenlines";
+  line1: Line3DNode;
+  line2: Line3DNode;
+  showArc?: boolean;
+  showProjection?: boolean;
+  colorLine1?: string;
+  colorLine2?: string;
+  colorArc?: string;
+  labelLine1?: string;
+  labelLine2?: string;
+  labelArc?: string;
+}
+
+/**
+ * Nodo para visualización del ángulo entre dos planos.
+ * Muestra dos planos con sus normales y el diedro (ángulo agudo).
+ */
+export interface AngleBetweenPlanesNode extends MathMDNodeBase {
+  type: "anglebetweenplanes";
+  plane1: Plane3DNode;
+  plane2: Plane3DNode;
+  showDiedro?: boolean;
+  showNormals?: boolean;
+  colorPlane1?: string;
+  colorPlane2?: string;
+  colorNormal1?: string;
+  colorNormal2?: string;
+  colorDiedro?: string;
+  labelPlane1?: string;
+  labelPlane2?: string;
+  labelNormal1?: string;
+  labelNormal2?: string;
+}
+
+/**
+ * Nodo para visualización del ángulo entre una recta y un plano.
+ * Muestra la recta, el plano, la proyección ortogonal y el ángulo complementario.
+ */
+export interface LinePlaneAngleNode extends MathMDNodeBase {
+  type: "lineplaneangle";
+  line: Line3DNode;
+  plane: Plane3DNode;
+  showProjection?: boolean;
+  showPerpendicular?: boolean;
+  colorLine?: string;
+  colorPlane?: string;
+  colorProjection?: string;
+  colorPerpendicular?: string;
+  labelLine?: string;
+  labelPlane?: string;
+  labelProjection?: string;
+}
+
+/**
+ * Nodo para visualización de distancia punto-punto.
+ */
+export interface PointPlaneDistanceNode extends MathMDNodeBase {
+  type: "pointplanedistance";
+  point: Point3DNode;
+  plane: Plane3DNode;
+  showPerpendicular?: boolean;
+  showFoot?: boolean;
+  colorPoint?: string;
+  colorPlane?: string;
+  colorPerpendicular?: string;
+  labelPoint?: string;
+  labelPlane?: string;
+  labelFoot?: string;
+}
+
+/**
+ * Nodo para visualización de distancia punto-recta.
+ */
+export interface PointLineDistanceNode extends MathMDNodeBase {
+  type: "pointlinedistance";
+  point: Point3DNode;
+  line: Line3DNode;
+  showPerpendicular?: boolean;
+  showFoot?: boolean;
+  colorPoint?: string;
+  colorLine?: string;
+  colorPerpendicular?: string;
+  labelPoint?: string;
+  labelLine?: string;
+  labelFoot?: string;
+}
+
+/**
+ * Nodo para visualización de distancia entre dos rectas (alabeadas o paralelas).
+ */
+export interface LinesDistanceNode extends MathMDNodeBase {
+  type: "linesdistance";
+  line1: Line3DNode;
+  line2: Line3DNode;
+  showClosestPoints?: boolean;
+  showCommonPerpendicular?: boolean;
+  colorLine1?: string;
+  colorLine2?: string;
+  colorPerpendicular?: string;
+  labelLine1?: string;
+  labelLine2?: string;
+}
+
+/**
+ * Tipo de cónica para el nodo.
+ */
+export type ConicType = "circle" | "ellipse" | "parabola" | "hyperbola";
+
+/**
+ * Modo de definición de una cónica.
+ */
+export type ConicMode = "focus-directrix" | "foci" | "center-radius" | "center-axes" | "general" | "three-points" | "focus-point";
+
+/**
+ * Nodo para visualización de cónicas 2D (circunferencia, elipse, parábola, hipérbola).
+ * Soporta múltiples modos de definición: foco-directriz, dos focos, centro-radio, centro-ejes, general, tres puntos, foco-punto.
+ */
+export interface ConicNode extends MathMDNodeBase {
+  type: "conic";
+  conicType?: ConicType;
+  mode?: ConicMode;
+  
+  // focus-directrix (foco-directriz)
+  focus?: [number, number];
+  directrix?: { A: number; B: number; C: number }; // Ax + By + C = 0
+  eccentricity?: number;
+  
+  // foci (dos focos)
+  focus1?: [number, number];
+  focus2?: [number, number];
+  sumDistances?: number; // para elipse: 2a
+  diffDistances?: number; // para hipérbola: 2a
+  
+  // center-radius (circunferencia)
+  center?: [number, number];
+  radius?: number;
+  
+  // center-axes (elipse con centro y ejes)
+  semiMajorAxis?: number; // a
+  semiMinorAxis?: number; // b
+  rotation?: number; // radianes
+  
+  // general: Ax² + Bxy + Cy² + Dx + Ey + F = 0
+  A?: number;
+  B?: number;
+  C?: number;
+  D?: number;
+  E?: number;
+  F?: number;
+  
+  // three-points (circunferencia por 3 puntos)
+  pointA?: [number, number];
+  pointB?: [number, number];
+  pointC?: [number, number];
+  
+  // focus-point (parábola foco-punto en directriz)
+  focusPoint?: [number, number];
+  directrixPoint?: [number, number];
+  
+  // Visualización
+  xDomain?: [number, number];
+  yDomain?: [number, number];
+  showFocus?: boolean;
+  showDirectrix?: boolean;
+  showCenter?: boolean;
+  showVertices?: boolean;
+  showAxes?: boolean;
+  showAsymptotes?: boolean;
+  showDirectrices?: boolean;
+  color?: string;
+  colorFocus?: string;
+  colorDirectrix?: string;
+  colorCenter?: string;
+  colorVertices?: string;
+  colorAxes?: string;
+  colorAsymptotes?: string;
+  opacity?: number;
+  labelFocus?: string;
+  labelDirectrix?: string;
+  labelCenter?: string;
+  labelVertices?: string;
+  label?: string;
+}
+
 export interface SliderNode extends MathMDNodeBase {
   type: "slider";
   name: string;
+  label?: string;
   min: number;
   max: number;
   step: number;
@@ -402,13 +745,16 @@ export interface StatisticsNode extends MathMDNodeBase {
 /** Ten independent calculus visualization modes, all serializable as .bwjm text. */
 export type CalculusVizMode =
   | "area-dx" | "area-dy" | "area-pieces" | "area-parametric" | "area-polar"
-  | "double-region" | "change-order" | "double-polar" | "revolution" | "green";
+  | "double-region" | "change-order" | "double-polar" | "revolution" | "green" | "riemann";
 
 export interface CalculusVizNode extends MathMDNodeBase {
   type: "calculusviz";
   paramControls?: GraphParameterControls;
   mode: CalculusVizMode;
   domain: [number, number];
+  partitions?: number | string;
+  upperBound?: string;
+  color?: string;
   f?: string;
   g?: string;
   integrand?: string;
@@ -432,7 +778,7 @@ export interface TextNode extends MathMDNodeBase {
   content: string;
 }
 
-// The 23 recognized MathMD visualization nodes (15 original + 8 new scene contracts)
+// The 24 recognized MathMD visualization nodes (15 original + 8 new scene contracts + 1 cross product)
 export type MathMDNode =
   | Plot2DNode
   | Surface3DNode
@@ -463,7 +809,17 @@ export type MathMDNode =
   | StatisticsNode
   | Parametric2DNode
   | Flow2DNode
-  | CalculusVizNode;
+  | CalculusVizNode
+  | CrossProductNode
+  | Line3DNode
+  | Plane3DNode
+  | AngleBetweenLinesNode
+  | AngleBetweenPlanesNode
+  | LinePlaneAngleNode
+  | PointPlaneDistanceNode
+  | PointLineDistanceNode
+  | LinesDistanceNode
+  | ConicNode;
 
 // --- Deterministic & Unicode-Safe ID Helper ---
 
@@ -595,6 +951,7 @@ export const surface3dSchema = mathmdNodeBaseSchema.extend({
   yDomain: domainSchema,
   samples: z.number().int().min(2).max(200).optional(),
   contours: z.boolean().optional(),
+  contourColor: z.string().regex(/^#[\da-f]{6}$/i).optional(),
   animated: z.boolean().optional(),
   showInfo: z.boolean().optional(),
   color: z.string().optional(),
@@ -683,6 +1040,7 @@ export const tangentplaneSchema = mathmdNodeBaseSchema.extend({
 
 const sliderNodeSchema = mathmdNodeBaseSchema.extend({
   type: z.literal("slider"),
+  label: z.string().min(1).max(80).optional(),
   name: controlNameSchema,
   min: z.number().finite(),
   max: z.number().finite(),
@@ -990,9 +1348,13 @@ export const calculusVizSchema = mathmdNodeBaseSchema.extend({
   paramControls: graphParameterControlsSchema.optional(),
   mode: z.enum([
     "area-dx", "area-dy", "area-pieces", "area-parametric", "area-polar",
-    "double-region", "change-order", "double-polar", "revolution", "green",
+    "double-region", "change-order", "double-polar", "revolution", "green", "riemann",
   ]),
   domain: domainSchema,
+  partitions: z.union([z.number().int().min(1).max(500),
+    z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,31}$/)]).optional(),
+  upperBound: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,31}$/).optional(),
+  color: z.string().regex(/^#[\da-f]{6}$/i).optional(),
   f: z.string().min(1).max(1024).optional(),
   g: z.string().min(1).max(1024).optional(),
   integrand: z.string().min(1).max(1024).optional(),
@@ -1015,7 +1377,7 @@ function validateCalculusViz(
   context: z.RefinementCtx,
 ): void {
   const betweenModes = ["area-dx", "area-dy", "area-pieces", "area-polar",
-    "double-region", "change-order", "double-polar", "revolution"];
+    "double-region", "change-order", "double-polar", "revolution", "riemann"];
   if (betweenModes.includes(data.mode) && (!data.f || !data.g)) {
     context.addIssue({code:z.ZodIssueCode.custom,
       message:"This mode requires nonempty expressions f and g", path:["f"]});
@@ -1043,41 +1405,464 @@ function validateCalculusViz(
   }
 }
 
-// Discriminated union of all 28 MathMD block schemas
+// Schema for CrossProduct visualization node
+export const crossProductSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("crossproduct"),
+  u: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+  v: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+  w: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).optional(),
+  origin: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).optional(),
+  showPlane: z.boolean().optional(),
+  showNormal: z.boolean().optional(),
+  showArea: z.boolean().optional(),
+  showTriangle: z.boolean().optional(),
+  showVolume: z.boolean().optional(),
+  showSteps: z.boolean().optional(),
+  reverseOrder: z.boolean().optional(),
+  showDeterminant: z.boolean().optional(),
+  showRightHand: z.boolean().optional(),
+  showAnticommutative: z.boolean().optional(),
+  showDistributive: z.boolean().optional(),
+  showIdentities: z.boolean().optional(),
+  showCollapse: z.boolean().optional(),
+  collapseFactor: z.number().finite().min(0).max(1).optional(),
+  collapseTarget: z.enum(["zero", "coplanar"]).optional(),
+  showSignChallenge: z.boolean().optional(),
+  signChallengeMode: z.enum(["random", "fixed", "quiz"]).optional(),
+  signChallengeSeed: z.number().int().optional(),
+  colorU: z.string().optional(),
+  colorNormal: z.string().optional(),
+  colorPlane: z.string().optional(),
+  colorTriangle: z.string().optional(),
+  colorVolume: z.string().optional(),
+  planeOpacity: z.number().finite().min(0).max(1).optional(),
+  labelU: z.string().optional(),
+  labelV: z.string().optional(),
+  labelW: z.string().optional(),
+  labelNormal: z.string().optional(),
+});
+
+// Schema for Line3D visualization node
+export const line3dNodeSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("line3d"),
+  point: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+  direction: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+  tDomain: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  showPoint: z.boolean().optional(),
+  showDirection: z.boolean().optional(),
+  showSegment: z.boolean().optional(),
+  segmentT: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  color: z.string().optional(),
+  colorPoint: z.string().optional(),
+  colorDirection: z.string().optional(),
+  labelPoint: z.string().optional(),
+  labelDirection: z.string().optional(),
+  label: z.string().optional(),
+  paramName: z.string().optional(),
+});
+
+export function validateLine3D(data: any, ctx: z.RefinementCtx): void {
+  // Validate direction is not zero vector
+  if (data.direction && data.direction[0] === 0 && data.direction[1] === 0 && data.direction[2] === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Vector director no puede ser cero", path: ["direction"] });
+  }
+}
+
+export const line3dSchema = line3dNodeSchema.superRefine(validateLine3D);
+
+// Schema for Plane3D visualization node
+export const plane3dNodeSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("plane3d"),
+  mode: z.enum(["point-normal", "three-points", "point-vectors", "parametric", "general"]).optional(),
+  
+  // point-normal
+  point: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).optional(),
+  normal: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).optional(),
+  
+  // three-points
+  pointA: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).optional(),
+  pointB: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).optional(),
+  pointC: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).optional(),
+  
+  // point-vectors / parametric
+  vectorU: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).optional(),
+  vectorV: z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).optional(),
+  
+  // general: Ax + By + Cz + D = 0
+  A: z.number().finite().optional(),
+  B: z.number().finite().optional(),
+  C: z.number().finite().optional(),
+  D: z.number().finite().optional(),
+  
+  xDomain: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  yDomain: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  showPoint: z.boolean().optional(),
+  showNormal: z.boolean().optional(),
+  showIntercepts: z.boolean().optional(),
+  color: z.string().optional(),
+  colorPoint: z.string().optional(),
+  colorNormal: z.string().optional(),
+  opacity: z.number().finite().min(0).max(1).optional(),
+  labelPoint: z.string().optional(),
+  labelNormal: z.string().optional(),
+  labelU: z.string().optional(),
+  labelV: z.string().optional(),
+  label: z.string().optional(),
+});
+
+export function validatePlane3D(data: any, ctx: z.RefinementCtx): void {
+  const mode = data.mode ?? "point-normal";
+  
+  // Validate based on mode
+  if (mode === "point-normal") {
+    if (!data.point || !data.normal) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo point-normal requiere point y normal", path: ["mode"] });
+    } else if (data.normal[0] === 0 && data.normal[1] === 0 && data.normal[2] === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Vector normal no puede ser cero", path: ["normal"] });
+    }
+  } else if (mode === "three-points") {
+    if (!data.pointA || !data.pointB || !data.pointC) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo three-points requiere pointA, pointB y pointC", path: ["mode"] });
+    }
+    // Check collinearity: (B-A) × (C-A) != 0
+    if (data.pointA && data.pointB && data.pointC) {
+      const AB = [data.pointB[0] - data.pointA[0], data.pointB[1] - data.pointA[1], data.pointB[2] - data.pointA[2]];
+      const AC = [data.pointC[0] - data.pointA[0], data.pointC[1] - data.pointA[1], data.pointC[2] - data.pointA[2]];
+      const cross = [
+        AB[1] * AC[2] - AB[2] * AC[1],
+        AB[2] * AC[0] - AB[0] * AC[2],
+        AB[0] * AC[1] - AB[1] * AC[0],
+      ];
+      const mag = Math.sqrt(cross[0]**2 + cross[1]**2 + cross[2]**2);
+      if (mag < 1e-12) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Los tres puntos son colineales, no definen un plano único", path: ["mode"] });
+      }
+    }
+  } else if (mode === "point-vectors" || mode === "parametric") {
+    if (!data.point || !data.vectorU || !data.vectorV) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: `Modo ${mode} requiere point, vectorU y vectorV`, path: ["mode"] });
+    } else {
+      const cross = [
+        data.vectorU[1] * data.vectorV[2] - data.vectorU[2] * data.vectorV[1],
+        data.vectorU[2] * data.vectorV[0] - data.vectorU[0] * data.vectorV[2],
+        data.vectorU[0] * data.vectorV[1] - data.vectorU[1] * data.vectorV[0],
+      ];
+      const mag = Math.sqrt(cross[0]**2 + cross[1]**2 + cross[2]**2);
+      if (mag < 1e-12) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Los vectores u y v son paralelos, no definen un plano único", path: ["mode"] });
+      }
+    }
+  } else if (mode === "general") {
+    if (data.A === undefined || data.B === undefined || data.C === undefined || data.D === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo general requiere A, B, C, D", path: ["mode"] });
+    }
+    const mag = Math.sqrt((data.A??0)**2 + (data.B??0)**2 + (data.C??0)**2);
+    if (mag < 1e-12) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Normal (A,B,C) no puede ser cero", path: ["mode"] });
+    }
+  }
+  
+  if (data.normal && data.normal[0] === 0 && data.normal[1] === 0 && data.normal[2] === 0) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Vector normal no puede ser cero", path: ["normal"] });
+  }
+}
+
+export const plane3dSchema = plane3dNodeSchema.superRefine(validatePlane3D);
+
+// Schema for AngleBetweenLines visualization node
+export const angleBetweenLinesSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("anglebetweenlines"),
+  line1: z.object({}).optional(),
+  line2: z.object({}).optional(),
+  showArc: z.boolean().optional(),
+  showProjection: z.boolean().optional(),
+  colorLine1: z.string().optional(),
+  colorLine2: z.string().optional(),
+  colorArc: z.string().optional(),
+  labelLine1: z.string().optional(),
+  labelLine2: z.string().optional(),
+  labelArc: z.string().optional(),
+});
+
+// Schema for AngleBetweenPlanes visualization node
+export const angleBetweenPlanesSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("anglebetweenplanes"),
+  plane1: z.object({}).optional(),
+  plane2: z.object({}).optional(),
+  showDiedro: z.boolean().optional(),
+  showNormals: z.boolean().optional(),
+  colorPlane1: z.string().optional(),
+  colorPlane2: z.string().optional(),
+  colorNormal1: z.string().optional(),
+  colorNormal2: z.string().optional(),
+  colorDiedro: z.string().optional(),
+  labelPlane1: z.string().optional(),
+  labelPlane2: z.string().optional(),
+  labelNormal1: z.string().optional(),
+  labelNormal2: z.string().optional(),
+});
+
+// Schema for LinePlaneAngle visualization node
+export const linePlaneAngleSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("lineplaneangle"),
+  line: z.object({}).optional(),
+  plane: z.object({}).optional(),
+  showProjection: z.boolean().optional(),
+  showPerpendicular: z.boolean().optional(),
+  colorLine: z.string().optional(),
+  colorPlane: z.string().optional(),
+  colorProjection: z.string().optional(),
+  colorPerpendicular: z.string().optional(),
+  labelLine: z.string().optional(),
+  labelPlane: z.string().optional(),
+  labelProjection: z.string().optional(),
+});
+
+// Schema for PointPlaneDistance visualization node
+export const pointPlaneDistanceSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("pointplanedistance"),
+  point: z.object({}).optional(),
+  plane: z.object({}).optional(),
+  showPerpendicular: z.boolean().optional(),
+  showFoot: z.boolean().optional(),
+  colorPoint: z.string().optional(),
+  colorPlane: z.string().optional(),
+  colorPerpendicular: z.string().optional(),
+  labelPoint: z.string().optional(),
+  labelPlane: z.string().optional(),
+  labelFoot: z.string().optional(),
+});
+
+// Schema for PointLineDistance visualization node
+export const pointLineDistanceSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("pointlinedistance"),
+  point: z.object({}).optional(),
+  line: z.object({}).optional(),
+  showPerpendicular: z.boolean().optional(),
+  showFoot: z.boolean().optional(),
+  colorPoint: z.string().optional(),
+  colorLine: z.string().optional(),
+  colorPerpendicular: z.string().optional(),
+  labelPoint: z.string().optional(),
+  labelLine: z.string().optional(),
+  labelFoot: z.string().optional(),
+});
+
+// Schema for LinesDistance visualization node
+// Schema for LinesDistance visualization node
+export const linesDistanceSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("linesdistance"),
+  line1: z.object({}).optional(),
+  line2: z.object({}).optional(),
+  showClosestPoints: z.boolean().optional(),
+  showCommonPerpendicular: z.boolean().optional(),
+  colorLine1: z.string().optional(),
+  colorLine2: z.string().optional(),
+  colorPerpendicular: z.string().optional(),
+  labelLine1: z.string().optional(),
+  labelLine2: z.string().optional(),
+});
+
+// Schema for Conic visualization node
+export const conicBaseSchema = mathmdNodeBaseSchema.extend({
+  type: z.literal("conic"),
+  conicType: z.enum(["circle", "ellipse", "parabola", "hyperbola"]).optional(),
+  mode: z.enum(["focus-directrix", "foci", "center-radius", "center-axes", "general", "three-points", "focus-point"]).optional(),
+  
+  // focus-directrix
+  focus: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  directrix: z.object({ A: z.number().finite(), B: z.number().finite(), C: z.number().finite() }).optional(),
+  eccentricity: z.number().finite().optional(),
+  
+  // foci
+  focus1: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  focus2: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  sumDistances: z.number().finite().positive().optional(),
+  diffDistances: z.number().finite().positive().optional(),
+  
+  // center-radius
+  center: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  radius: z.number().finite().positive().optional(),
+  
+  // center-axes
+  semiMajorAxis: z.number().finite().positive().optional(),
+  semiMinorAxis: z.number().finite().positive().optional(),
+  rotation: z.number().finite().optional(),
+  
+  // general
+  A: z.number().finite().optional(),
+  B: z.number().finite().optional(),
+  C: z.number().finite().optional(),
+  D: z.number().finite().optional(),
+  E: z.number().finite().optional(),
+  F: z.number().finite().optional(),
+  
+  // three-points
+  pointA: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  pointB: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  pointC: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  
+  // focus-point
+  focusPoint: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  directrixPoint: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  
+  // Visualización
+  xDomain: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  yDomain: z.tuple([z.number().finite(), z.number().finite()]).optional(),
+  showFocus: z.boolean().optional(),
+  showDirectrix: z.boolean().optional(),
+  showCenter: z.boolean().optional(),
+  showVertices: z.boolean().optional(),
+  showAxes: z.boolean().optional(),
+  showAsymptotes: z.boolean().optional(),
+  showDirectrices: z.boolean().optional(),
+  color: z.string().optional(),
+  colorFocus: z.string().optional(),
+  colorDirectrix: z.string().optional(),
+  colorCenter: z.string().optional(),
+  colorVertices: z.string().optional(),
+  colorAxes: z.string().optional(),
+  colorAsymptotes: z.string().optional(),
+  opacity: z.number().finite().min(0).max(1).optional(),
+  labelFocus: z.string().optional(),
+  labelDirectrix: z.string().optional(),
+  labelCenter: z.string().optional(),
+  labelVertices: z.string().optional(),
+  label: z.string().optional(),
+});
+
+export function validateConic(data: any, ctx: z.RefinementCtx): void {
+  const mode = data.mode ?? "center-radius";
+  const type = data.conicType ?? "circle";
+  
+  if (mode === "focus-directrix") {
+    if (!data.focus || !data.directrix) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo focus-directrix requiere focus y directrix", path: ["mode"] });
+    }
+    if (data.eccentricity !== undefined && data.eccentricity <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Excentricidad debe ser positiva", path: ["eccentricity"] });
+    }
+  } else if (mode === "foci") {
+    if (!data.focus1 || !data.focus2) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo foci requiere focus1 y focus2", path: ["mode"] });
+    }
+    if (data.sumDistances !== undefined && data.sumDistances <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Suma de distancias debe ser positiva", path: ["sumDistances"] });
+    }
+    if (data.diffDistances !== undefined && data.diffDistances <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Diferencia de distancias debe ser positiva", path: ["diffDistances"] });
+    }
+  } else if (mode === "center-radius") {
+    if (!data.center || !data.radius) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo center-radius requiere center y radius", path: ["mode"] });
+    }
+    if (data.radius !== undefined && data.radius <= 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Radio debe ser positivo", path: ["radius"] });
+    }
+  } else if (mode === "center-axes") {
+    if (!data.center || !data.semiMajorAxis || !data.semiMinorAxis) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo center-axes requiere center, semiMajorAxis y semiMinorAxis", path: ["mode"] });
+    }
+    if (data.semiMajorAxis !== undefined && data.semiMinorAxis !== undefined && data.semiMinorAxis > data.semiMajorAxis) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Eje menor no puede ser mayor que eje mayor", path: ["semiMinorAxis"] });
+    }
+  } else if (mode === "general") {
+    if (data.A === undefined || data.B === undefined || data.C === undefined || data.D === undefined || data.E === undefined || data.F === undefined) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo general requiere A, B, C, D, E, F", path: ["mode"] });
+    }
+    const disc = (data.B??0)**2 - 4 * (data.A??0) * (data.C??0);
+    if (disc === 0) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Discriminante B² - 4AC = 0: parábola degenerada o rectas", path: ["mode"] });
+    }
+  } else if (mode === "three-points") {
+    if (!data.pointA || !data.pointB || !data.pointC) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo three-points requiere pointA, pointB y pointC", path: ["mode"] });
+    }
+    // Check collinearity
+    if (data.pointA && data.pointB && data.pointC) {
+      const area = 0.5 * Math.abs(
+        data.pointA[0] * (data.pointB[1] - data.pointC[1]) +
+        data.pointB[0] * (data.pointC[1] - data.pointA[1]) +
+        data.pointC[0] * (data.pointA[1] - data.pointB[1])
+      );
+      if (area < 1e-12) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Los tres puntos son colineales, no definen una circunferencia única", path: ["mode"] });
+      }
+    }
+  } else if (mode === "focus-point") {
+    if (!data.focusPoint || !data.directrixPoint) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo focus-point requiere focusPoint y directrixPoint", path: ["mode"] });
+    }
+  }
+  
+  // Validate conicType consistency with mode
+  if (mode === "center-radius" && data.conicType && data.conicType !== "circle") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo center-radius solo compatible con circle", path: ["conicType"] });
+  }
+  if (mode === "center-axes" && data.conicType && data.conicType !== "ellipse") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo center-axes solo compatible con ellipse", path: ["conicType"] });
+  }
+  if (mode === "focus-directrix" && data.conicType && data.conicType === "circle") {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo focus-directrix no compatible con circle (excentricidad = 1 para parábola)", path: ["conicType"] });
+  }
+}
+
+export const conicSchema = conicBaseSchema.superRefine(validateConic);
+
+// Discriminated union of all MathMD block schemas
 const mathmdNodeDiscriminatedUnion = z.discriminatedUnion("type", [
-  plot2dSchema,
-  surface3dSchema,
-  vector2dSchema,
-  vector3dSchema,
-  curve3dSchema,
-  vectorfield2dSchema,
-  gradientSchema,
-  tangentplaneSchema,
-  sliderNodeSchema,
-  checkboxSchema,
-  point2dSchema,
-  point3dSchema,
-  diagramSchema,
-  geometrySchema,
-  contourSchema,
-  trajectorySchema,
-  particleSchema,
-  vectorArrowSchema,
-  frameSchema,
-  fieldSchema,
-  regionSchema,
-  cameraSchema,
-  timelineNodeSchema,
-  dataTableSchema,
-  functionTableSchema,
-  dataChartSchema,
-  statisticsSchema,
-  parametric2dSchema,
-  flow2dSchema,
-  calculusVizSchema,
+  plot2dSchema as any,
+  surface3dSchema as any,
+  vector2dSchema as any,
+  vector3dSchema as any,
+  curve3dSchema as any,
+  vectorfield2dSchema as any,
+  gradientSchema as any,
+  tangentplaneSchema as any,
+  sliderNodeSchema as any,
+  checkboxSchema as any,
+  point2dSchema as any,
+  point3dSchema as any,
+  diagramSchema as any,
+  geometrySchema as any,
+  contourSchema as any,
+  trajectorySchema as any,
+  particleSchema as any,
+  vectorArrowSchema as any,
+  frameSchema as any,
+  fieldSchema as any,
+  regionSchema as any,
+  cameraSchema as any,
+  timelineNodeSchema as any,
+  dataTableSchema as any,
+  functionTableSchema as any,
+  dataChartSchema as any,
+  statisticsSchema as any,
+  parametric2dSchema as any,
+  flow2dSchema as any,
+  calculusVizSchema as any,
+  crossProductSchema as any,
+  line3dNodeSchema as any,
+  plane3dNodeSchema as any,
+  angleBetweenLinesSchema as any,
+  angleBetweenPlanesSchema as any,
+  linePlaneAngleSchema as any,
+  pointPlaneDistanceSchema as any,
+  pointLineDistanceSchema as any,
+  linesDistanceSchema as any,
+  conicBaseSchema as any,
 ]);
 
 export const mathmdNodeSchema = mathmdNodeDiscriminatedUnion.superRefine((node, context) => {
+  if (node.type === "line3d") {
+    validateLine3D(node, context);
+  }
+  if (node.type === "plane3d") {
+    validatePlane3D(node, context);
+  }
+  if (node.type === "conic") {
+    validateConic(node, context);
+  }
   if (node.type === "calculusviz") {
     validateCalculusViz(node, context);
   }
@@ -1097,7 +1882,7 @@ export const mathmdNodeSchema = mathmdNodeDiscriminatedUnion.superRefine((node, 
     if (node.units && node.units.length !== node.columns.length) {
       context.addIssue({ code: z.ZodIssueCode.custom, message: "units must match column count", path: ["units"] });
     }
-    node.rows.forEach((row, index) => {
+    node.rows.forEach((row: (string | number | boolean | null)[], index: number) => {
       if (row.length !== node.columns.length) context.addIssue({
         code: z.ZodIssueCode.custom, message: "row width must match column count", path: ["rows", index],
       });
@@ -1129,12 +1914,44 @@ export const mathmdNodeSchema = mathmdNodeDiscriminatedUnion.superRefine((node, 
   }
 });
 
+/** Camera state schema for manifest */
+const cameraStateSchema = z.object({
+  position: z.tuple([z.number(), z.number(), z.number()]),
+  target: z.tuple([z.number(), z.number(), z.number()]),
+  up: z.tuple([z.number(), z.number(), z.number()]),
+  fov: z.number().optional(),
+  projection: z.enum(["perspective", "orthographic"]).optional(),
+});
+
+/** Initial conditions schema for manifest */
+const initialConditionsSchema = z.object({
+  graphParameters: z.record(z.record(z.number())).optional(),
+  cameraState: z.record(cameraStateSchema).optional(),
+  timelinePositions: z.record(z.number()).optional(),
+}).optional();
+
+/** Document Manifest schema */
+const documentManifestSchema = z.object({
+  manifestVersion: z.literal(1),
+  engineVersion: z.string(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+  initialConditions: initialConditionsSchema,
+  schemaVersion: z.string().optional(),
+}).strict();
+
 // Document schema
 export const mathmdDocumentSchema = z.object({
   type: z.literal("document"),
   source: z.string(),
   children: z.array(mathmdNodeSchema),
   diagnostics: z.array(mathmdDiagnosticSchema),
+  manifest: documentManifestSchema.optional(),
 }).strict();
 
-export type { z };
+/** Type inferred from initialConditionsSchema */
+export type InitialConditions = z.infer<typeof initialConditionsSchema>;
+
+export { documentManifestSchema, cameraStateSchema, initialConditionsSchema };
+
+export { z } from "zod";
