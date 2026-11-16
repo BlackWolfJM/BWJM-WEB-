@@ -63,7 +63,7 @@ describe("Parabola geometry and definitions",()=>{
     const initial=parabolaFromVertex([2,-3],-1.5,"x",Math.PI/6);
     const coeff=coefficientsFromParabola(initial.vertex,initial.p,initial.rotation);
     const alt=Object.fromEntries(Object.entries(coeff).map(([key,v])=>[key,-3*v]));
-    const result=parabolaFromGeneral(alt as typeof coeff);
+    const result=parabolaFromGeneral(alt as unknown as typeof coeff);
     close(result.vertex[0],2);close(result.vertex[1],-3);
     close(result.focus[0],initial.focus[0]);
     close(result.focus[1],initial.focus[1]);
