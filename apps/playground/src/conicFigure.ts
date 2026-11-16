@@ -18,13 +18,12 @@ export function createConicSVG(node: ConicNode): SVGSVGElement {
   svg.style.maxHeight = "460px";
   const type = node.conicType ?? "circle";
   const [h, k] = node.center ?? [0, 0];
-  const a = type === "circle" ? (node.radius ?? 2) : (node.semiMajorAxis ?? 3);
+  const a = node.semiMajorAxis ?? 3;
   const b = node.semiMinorAxis ?? 2;
   const p = node.focalParameter ?? 1;
   const axis = node.axis ?? "x";
   const theta = node.rotation ?? 0;
-  const c = type === "ellipse" ? Math.sqrt(Math.max(0, a*a-b*b)) :
-    type === "hyperbola" ? Math.hypot(a,b) : 0;
+  const c = type === "hyperbola" ? Math.hypot(a,b) : 0;
   const extent = Math.max(4, type === "parabola" ? Math.abs(p)*5 : a*1.9, b*2, c*1.4);
   const scale = Math.min(290/extent, 190/extent);
   const px = (x: number) => 360 + (x-h)*scale;
@@ -57,11 +56,7 @@ export function createConicSVG(node: ConicNode): SVGSVGElement {
   }
   line(h-extent,k,h+extent,k,"#64748b");
   line(h,k-extent,h,k+extent,"#64748b");
-  if(type==="circle" || type==="ellipse"){
-    const pts:[number,number][]=[];
-    for(let i=0;i<=240;i++){const t=2*Math.PI*i/240;pts.push(point(a*Math.cos(t),(type==="circle"?a:b)*Math.sin(t)));}
-    polyline(pts);
-  } else if(type==="parabola"){
+  if(type==="parabola"){
     const pts:[number,number][]=[];
     for(let i=0;i<=220;i++){const v=-extent*1.1+2*extent*1.1*i/220;const u=v*v/(4*p);
       pts.push(axis==="x"?point(u,v):point(v,u));}
@@ -74,10 +69,6 @@ export function createConicSVG(node: ConicNode): SVGSVGElement {
         pts.push(axis==="x"?point(u,v):point(v,u));}
       polyline(pts);
     }
-  }
-  if(node.showAxes!==false && type==="ellipse"){
-    const [x1,y1]=point(-a,0),[x2,y2]=point(a,0);line(x1,y1,x2,y2,"#eab308",true);
-    const [u1,v1]=point(0,-b),[u2,v2]=point(0,b);line(u1,v1,u2,v2,"#eab308",true);
   }
   if(type==="hyperbola" && node.showAsymptotes!==false){
     for(const sign of [-1,1]){
@@ -96,7 +87,7 @@ export function createConicSVG(node: ConicNode): SVGSVGElement {
       line(from[0],from[1],to[0],to[1],"#d97706",true);
     }
   }
-  if((type==="ellipse"||type==="hyperbola") && node.showFocus!==false){
+  if(type==="hyperbola" && node.showFocus!==false){
     for(const s of [-1,1]){
       const [x,y]=axis==="y"&&type==="hyperbola"?point(0,s*c):point(s*c,0);
       dot(x,y,s<0?"F₁":"F₂");
