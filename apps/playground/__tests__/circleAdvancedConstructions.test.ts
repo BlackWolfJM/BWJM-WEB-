@@ -3,7 +3,7 @@ import { parseMathMD } from "@mathmd/parser";
 import type { ConicNode } from "@mathmd/ast";
 import { circleFromCenterRadius } from "../src/circleGeometry.js";
 import { circleAuxiliaryLines, circleLineTex, tangentsFromPoint,
-  circlePointAt } from "../src/circleConstructions.js";
+  } from "../src/circleConstructions.js";
 import { exactAxisIntersections, exactRootTex } from "../src/circleExact.js";
 import { getCircleReadout } from "../src/circleReadout.js";
 import { circleDragChange } from "../src/circleDrag.js";
