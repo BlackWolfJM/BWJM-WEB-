@@ -42,6 +42,7 @@ import {
   parametric2dSchema,
   flow2dSchema,
   calculusVizSchema,
+  conicSchema,
 } from "@mathmd/ast";
 
 interface MdastPosition {
@@ -138,6 +139,7 @@ const SUPPORTED_MATHMD_TYPES = new Set([
   "parametric2d",
   "flow2d",
   "calculusviz",
+  "conic",
 ]);
 
 const VALID_ID_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -244,6 +246,18 @@ function buildMathMDNode(
   let payload: Record<string, unknown>;
 
   switch (type) {
+    case "conic": {
+      const parsed = conicSchema.safeParse({ ...base, ...data });
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) diagnostics.push({
+          severity: "error", code: "MATHMD_SCHEMA_INVALID", message: issue.message,
+          range, blockType: type, blockId: id, path: issue.path,
+        });
+        return null;
+      }
+      return parsed.data;
+    }
+
     case "plot2d": {
       payload = {
         ...base,
