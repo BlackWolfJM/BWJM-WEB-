@@ -492,6 +492,9 @@ export interface ConicNode extends MathMDNodeBase {
   showSecant?: boolean;
   showTangent?: boolean;
   showIntersections?: boolean;
+  /** Circunferencia: tangencia angular o desde un punto cartesiano externo. */
+  tangentMode?: "angle" | "point";
+  tangentPoint?: [number,number];
   showEquation?: boolean;
   showInteractiveControls?: boolean;
   radiusAngle?: number;
@@ -1747,6 +1750,8 @@ export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   showSecant: z.boolean().optional(),
   showTangent: z.boolean().optional(),
   showIntersections: z.boolean().optional(),
+  tangentMode: z.enum(["angle", "point"]).optional(),
+  tangentPoint: z.tuple([z.number().finite(),z.number().finite()]).optional(),
   showEquation: z.boolean().optional(),
   showInteractiveControls: z.boolean().optional(),
   radiusAngle: z.number().finite().min(-3600).max(3600).optional(),
@@ -1855,6 +1860,11 @@ export function validateConic(data: any, ctx: z.RefinementCtx): void {
     }
   }
   
+  if (type === "circle" && data.tangentMode === "point" && data.showTangent === true &&
+      !data.tangentPoint) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom,
+      message: "El modo de tangente por punto requiere las coordenadas del punto", path: ["tangentPoint"] });
+  }
   // Validate conicType consistency with mode
   if (mode === "center-radius" && data.conicType && data.conicType !== "circle") {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo center-radius solo compatible con circle", path: ["conicType"] });
