@@ -1,5 +1,8 @@
 import type { SourceRange } from "@mathmd/ast";
 import { parseMathMD } from "@mathmd/parser";
+import type { ConicNode } from "@mathmd/ast";
+import { circleFromCenterRadius, resolveCircle, type CircleGeometry } from "./circleGeometry.js";
+import type { CircleInteraction } from "./circleDrag.js";
 
 type GraphOptionValue = boolean | number | string | readonly number[];
 
@@ -219,4 +222,72 @@ export function updateEllipseDimensions(
     (parsed.mode==="canonical"||parsed.mode==="center-axes")&&
     parsed.center?.every((v,i)=>v===center[i])&&
     parsed.semiMajorAxis===a&&parsed.semiMinorAxis===b?next:source;
+}
+
+
+/**
+ * Persist circle interaction in the original construction mode. General circles
+ * retain their quadratic coefficients and three-point circles keep three points.
+ */
+export function updateCircleInteraction(
+  source:string,range:SourceRange,node:ConicNode,
+  initial:CircleGeometry,change:CircleInteraction,
+):string{
+  const center=change.center??initial.center;
+  const radius=change.radius??initial.radius;
+  if(![...center,radius].every(Number.isFinite)||center.some(v=>Math.abs(v)>10000)||
+    !(radius>0)||radius>10000)return source;
+  let geometry:CircleGeometry;
+  try{geometry=circleFromCenterRadius([center[0],center[1]],radius);}catch{return source;}
+  const original=source.slice(range.start.offset,range.end.offset);
+  if(!original.startsWith(String.fromCharCode(96).repeat(3)+"conic"))return source;
+  const patches:Array<[string,GraphOptionValue]>=[];
+  const moving=Boolean(change.center||change.radius);
+  if(moving){
+    if(node.mode==="general"){
+      const factor=node.A??1;
+      for(const key of ["A","B","C","D","E","F"] as const)
+        patches.push([key,geometry.coefficients[key]*factor]);
+    }else if(node.mode==="three-points"){
+      const scale=radius/initial.radius;
+      for(const key of ["pointA","pointB","pointC"] as const){
+        const originalPoint=node[key];
+        if(!originalPoint)return source;
+        const point:[number,number]=[
+          center[0]+scale*(originalPoint[0]-initial.center[0]),
+          center[1]+scale*(originalPoint[1]-initial.center[1]),
+        ];
+        if(!point.every(Number.isFinite)||point.some(v=>Math.abs(v)>10000))return source;
+        patches.push([key,point]);
+      }
+    }else if(node.mode==="canonical"||node.mode==="center-radius"||!node.mode){
+      patches.push(["center",center],["radius",radius]);
+    }else return source;
+  }
+  for(const [key,value] of Object.entries(change.angles??{})){
+    if(!Number.isFinite(value)||Math.abs(value)>3600)return source;
+    patches.push([key,value]);
+  }
+  if(change.tangentPoint){
+    if(!change.tangentPoint.every(Number.isFinite))return source;
+    patches.push(["tangentPoint",change.tangentPoint]);
+  }
+  if(!patches.length)return source;
+  if(!node.viewCenter)patches.push(["viewCenter",initial.center]);
+  if(!node.viewSpan)patches.push(["viewSpan",Math.max(3,initial.radius*1.55)]);
+  let next=source,currentRange=range;
+  for(const [key,value] of patches){
+    const update=updateGraphField(next,currentRange,"conic",key,value);
+    currentRange={...currentRange,end:{...currentRange.end,
+      offset:currentRange.end.offset+update.length-next.length}};
+    next=update;
+  }
+  const parsed=parseMathMD(next.slice(range.start.offset,currentRange.end.offset)).children[0];
+  if(parsed?.type!=="conic"||parsed.conicType!=="circle")return source;
+  try {
+    const result=resolveCircle(parsed);
+    if(Math.hypot(result.center[0]-center[0],result.center[1]-center[1])>1e-6||
+       Math.abs(result.radius-radius)>1e-6)return source;
+  }catch{return source;}
+  return next;
 }

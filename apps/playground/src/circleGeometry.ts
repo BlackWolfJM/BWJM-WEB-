@@ -119,7 +119,7 @@ export function resolveCircle(node: Pick<ConicNode,
 export function serializeCircleBlock(
   mode:"center-radius"|"canonical"|"general"|"three-points",
   geometry: CircleGeometry,
-  options: Record<string,boolean|number|string>,
+  options: Record<string,boolean|number|string|readonly number[]>,
   points?:Array<[number,number]>,
 ):string {
   const rows=["```conic","conicType: circle","mode: "+mode];
