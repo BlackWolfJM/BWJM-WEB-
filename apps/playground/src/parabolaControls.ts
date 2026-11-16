@@ -17,7 +17,8 @@ export function mountParabolaControls(
   const table=document.createElement("table");
   table.className="bwjm-graph-settings-table";
   const body=table.createTBody();
-  let vertex:[number,number]=[...original.vertex],p=original.p,rotation=original.rotation;
+  const vertex:[number,number]=[...original.vertex];
+  let p=original.p,rotation=original.rotation;
   const magnitude=Math.max(4,Math.abs(p)*3);
   type Slider=[string,number,number,number,number,(n:number)=>void];
   const options:Slider[]=[
