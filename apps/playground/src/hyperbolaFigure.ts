@@ -81,13 +81,11 @@ export function createHyperbolaSVG(
   line([minX,0],[maxX,0],"#64748b","cartesian-axis",false,1);
 
   if(node.showAxes!==false){
-    const c=Math.cos(g.rotation),s=Math.sin(g.rotation),l=span*2;
-    line(hyperbolaPoint(g,-l,0),hyperbolaPoint(g,l,0),
+    const length=span*2;
+    line(hyperbolaPoint(g,-length,0),hyperbolaPoint(g,length,0),
       "#c99a38","transverse-axis",true);
-    line(hyperbolaPoint(g,0,-l),hyperbolaPoint(g,0,l),
+    line(hyperbolaPoint(g,0,-length),hyperbolaPoint(g,0,length),
       "#c99a38","conjugate-axis",true);
-    // No arbitrary horizontal/vertical overlays: both axes follow the rotation.
-    void c;void s;
   }
   if(node.showRectangle){
     svg.appendChild(make("polygon",{points:g.rectangle.map(([x,y])=>X(x)+","+Y(y)).join(" "),
