@@ -21,9 +21,9 @@ export function mountEllipseControls(
   let a=initial.a,b=initial.b;
   const span=Math.max(5,a*3);
   const rows:Array<[string,number,number,number,number,(n:number)=>void]>=[
-    ["Centro X",center[0],center[0]-span,center[0]+span,span/150,v=>{center[0]=v;}],
-    ["Centro Y",center[1],center[1]-span,center[1]+span,span/150,v=>{center[1]=v;}],
-    ["Semieje mayor a",a,b,Math.max(a*2.5,b+1),a/140,v=>{a=v;}],
+    ["Centro X",center[0],Math.max(-10000,center[0]-span),Math.min(10000,center[0]+span),span/150,v=>{center[0]=v;}],
+    ["Centro Y",center[1],Math.max(-10000,center[1]-span),Math.min(10000,center[1]+span),span/150,v=>{center[1]=v;}],
+    ["Semieje mayor a",a,b,Math.min(10000,Math.max(a*2.5,b+1)),a/140,v=>{a=v;}],
     ["Semieje menor b",b,Math.max(.001,b/5),a,b/140,v=>{b=v;}],
   ];
   for(const [label,original,min,max,step,assign] of rows){
