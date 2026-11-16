@@ -41,6 +41,8 @@ import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
 import { FormulaModal } from "./FormulaModal.js";
+import { ConicModal } from "./ConicModal.js";
+import { createConicSVG } from "./conicFigure.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
 import { ImageModal, type ImageInsertion } from "./ImageModal.js";
 import { insertEmbeddedImage } from "./documentImages.js";
@@ -570,6 +572,7 @@ export function BWJMStudio() {
     setIsFormulaModalOpen(true);
   };
   const [isChartModalOpen, setIsChartModalOpen] = useState<boolean>(false);
+  const [isConicModalOpen, setIsConicModalOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
   const [examplePickerOpen, setExamplePickerOpen] = useState(false);
   const [imageMessage, setImageMessage] = useState<string | null>(null);
@@ -992,6 +995,7 @@ initialConditions:
       case "rule": insertAtCursor("\n\n---\n\n"); break;
       case "formula": openFormulaComposer(); break;
       case "graph": setIsChartModalOpen(true); break;
+      case "conic": setIsConicModalOpen(true); break;
       case "table":
         insertAtCursor("\n\n| Columna 1 | Columna 2 |\n|---|---|\n| Dato 1 | Dato 2 |\n\n");
         break;
@@ -2000,6 +2004,25 @@ initialConditions:
           updateCalculusReport(report, data);
           cardBody.appendChild(report);
           }
+        } else if (node.type === "conic") {
+          const figure = createConicSVG(node);
+          cardBody.appendChild(figure);
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "bwjm-export-svg";
+          button.textContent = "↓ Exportar SVG";
+          button.onclick = () => {
+            const clone = figure.cloneNode(true) as SVGSVGElement;
+            const blob = new Blob([new XMLSerializer().serializeToString(clone)],
+              { type: "image/svg+xml;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = node.id + ".svg";
+            link.click();
+            URL.revokeObjectURL(url);
+          };
+          cardBody.appendChild(button);
         } else if (node.type === "plot2d") {
           mountSvg(cardBody, node, 720, 360);
         } else if (node.type === "vector2d" || node.type === "vector3d") {
@@ -2662,6 +2685,10 @@ initialConditions:
         onInsert={(formulaText: string) => insertAtCursor(formulaText)}
       />
 
+      {isConicModalOpen && <ConicModal
+        onClose={() => setIsConicModalOpen(false)}
+        onInsert={(block: string) => insertAtCursor(block)}
+      />}
       <ChartModal
         isOpen={isChartModalOpen}
         documentVariables={doc.children.flatMap(node =>
