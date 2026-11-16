@@ -2309,6 +2309,151 @@ body {
   font-size: 1em;
 }
 
+/* Scientific circle properties: shared between the composer and the inserted graph.
+   Neutral layout, equation-first hierarchy, and no duplicated blue callout panel. */
+.bwjm-curve-readout.bwjm-circle-report {
+  padding: 1rem 1.1rem;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: none;
+  font-size: .84rem;
+  min-width: 0;
+}
+.bwjm-circle-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: .4rem 1rem;
+  padding-bottom: .7rem;
+}
+.bwjm-circle-report-header h3 {
+  margin: 0;
+  font-size: .92rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.bwjm-circle-mode {
+  color: var(--text-secondary);
+  font-size: .75rem;
+}
+.bwjm-circle-main-equation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem 1.2rem;
+  flex-wrap: wrap;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: .65rem .8rem;
+  margin-bottom: .8rem;
+  min-width: 0;
+}
+.bwjm-circle-eyebrow {
+  color: var(--text-secondary);
+  font-size: .69rem;
+  font-weight: 650;
+  letter-spacing: .035em;
+}
+.bwjm-circle-main-equation-math {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  color: var(--text-main);
+}
+.bwjm-circle-main-equation-math .katex { font-size: 1.2em; }
+.bwjm-circle-highlights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+  margin: 0;
+  padding: .15rem 0 .85rem;
+}
+.bwjm-circle-highlights > div {
+  display: grid;
+  align-content: start;
+  gap: .22rem;
+  min-width: 0;
+  padding: .15rem .65rem;
+  border-right: 1px solid var(--border);
+}
+.bwjm-circle-highlights > div:first-child { padding-left: 0; }
+.bwjm-circle-highlights > div:last-child { border-right: none; }
+.bwjm-circle-highlights dt {
+  color: var(--text-secondary);
+  font-size: .72rem;
+}
+.bwjm-circle-highlights dd {
+  margin: 0;
+  color: var(--text-main);
+  font-size: .95rem;
+  font-weight: 650;
+  overflow-x: auto;
+  min-width: 0;
+}
+.bwjm-circle-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem 1.5rem;
+  padding-top: .85rem;
+}
+.bwjm-circle-section { min-width: 0; }
+.bwjm-circle-section h4 {
+  margin: 0 0 .3rem;
+  font-size: .74rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.bwjm-circle-detail-list { margin: 0; }
+.bwjm-circle-detail-list > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: .55rem;
+  padding: .38rem 0;
+  border-top: 1px solid var(--border);
+}
+.bwjm-circle-detail-list dt {
+  color: var(--text-secondary);
+  min-width: 0;
+  font-size: .74rem;
+}
+.bwjm-circle-detail-list dd {
+  margin: 0;
+  min-width: 0;
+  max-width: 65%;
+  color: var(--text-main);
+  text-align: right;
+  overflow-x: auto;
+  font-variant-numeric: tabular-nums;
+}
+.bwjm-circle-general,
+.bwjm-circle-angles {
+  border-top: 1px solid var(--border);
+  margin-top: .65rem;
+  padding-top: .75rem;
+}
+.bwjm-circle-general .bwjm-circle-detail-list dd { max-width: 75%; }
+.bwjm-circle-math { white-space: nowrap; }
+.bwjm-circle-preview-report { min-width: 0; margin-top: .75rem; }
+@media (max-width: 680px) {
+  .bwjm-circle-details { grid-template-columns: minmax(0, 1fr); gap: .7rem; }
+  .bwjm-circle-main-equation { align-items: flex-start; }
+}
+@media (max-width: 400px) {
+  .bwjm-circle-highlights { grid-template-columns: minmax(0, 1fr); }
+  .bwjm-circle-highlights > div {
+    padding: .3rem 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .bwjm-circle-highlights > div:last-child { border-bottom: 0; }
+}
+
+
 .bwjm-document-rename-input {
   box-sizing: border-box;
   width: 195px;
