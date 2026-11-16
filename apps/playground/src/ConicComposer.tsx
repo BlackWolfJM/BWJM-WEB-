@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { CircleComposer } from "./CircleComposer.js";
+import { EllipseComposer } from "./EllipseComposer.js";
 
 /** One inline editor shared by the unified Gráficos y superficies dialog. */
 type ConicKind = "circle" | "ellipse" | "parabola" | "hyperbola";
@@ -82,13 +83,15 @@ export function ConicComposer({ onClose, onInsert }: Props) {
       </label>
       {kind === "circle" ? (
         <CircleComposer onInsert={onInsert} onClose={onClose} />
+      ) : kind === "ellipse" ? (
+        <EllipseComposer onInsert={onInsert} onClose={onClose} />
       ) : (
         <>
           <div className="bwjm-modal-grid">
             {field("Centro o vértice: x", h, setH)}
             {field("Centro o vértice: y", k, setK)}
-            {kind !== "parabola" && field("Semieje a", a, setA)}
-            {(kind === "ellipse" || kind === "hyperbola") && field("Semieje b", b, setB)}
+            {kind === "hyperbola" && field("Semieje a", a, setA)}
+            {kind === "hyperbola" && field("Semieje b", b, setB)}
             {kind === "parabola" && field("Parámetro focal p (con signo)", p, setP)}
             <label className="bwjm-modal-field">
               <span className="bwjm-modal-label">Eje principal</span>
@@ -98,7 +101,7 @@ export function ConicComposer({ onClose, onInsert }: Props) {
                 <option value="y">Vertical</option>
               </select>
             </label>
-            {(kind === "ellipse" || kind === "hyperbola") &&
+            {kind === "hyperbola" &&
               field("Rotación (radianes)", rotation, setRotation)}
           </div>
           <fieldset className="bwjm-chart-coefficients">
