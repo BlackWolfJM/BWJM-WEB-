@@ -105,6 +105,7 @@ export function updateGraphOption(
     const allowed=new Set([
       "showCenter","showRadius","showDiameter","showChord","showSecant",
       "showTangent","showIntersections","showEquation","showInteractiveControls",
+      "showFocus","showVertices","showAxes","showDirectrices","showCoVertices","showLatusRectum",
     ]);
     if (!allowed.has(key) || typeof value !== "boolean") return source;
     const updated=updateGraphField(source,range,blockType,key,value);
