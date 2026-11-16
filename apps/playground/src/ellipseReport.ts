@@ -2,11 +2,34 @@ import type { ConicNode } from "@mathmd/ast";
 import { renderToString } from "katex";
 import { resolveEllipse, type EllipseGeometry } from "./ellipseGeometry.js";
 import { circleNumber, degreesToPiRadians } from "./circleReadout.js";
+import { exactScalarTex } from "./circleExact.js";
+import { ellipseAxisCrossingTex } from "./ellipseExact.js";
+import { circleLineTex } from "./circleConstructions.js";
+import { coefficientsFromEllipse, ellipseAxisCrossings, ellipseParametricTex,
+  ellipseTangentNormal } from "./ellipseEquation.js";
 
 export interface EllipseMetric { label: string; value: string; math?: boolean }
 const coord=(point:readonly [number,number])=>
-  "\\left("+circleNumber(point[0])+",\\;"+circleNumber(point[1])+"\\right)";
+  "\\left("+exactScalarTex(point[0])+",\\;"+exactScalarTex(point[1])+"\\right)";
 export function ellipseMetrics(node:ConicNode,geom:EllipseGeometry=resolveEllipse(node)):EllipseMetric[]{
+  const original=node.mode==="general"&&
+    [node.A,node.B,node.C,node.D,node.E,node.F].every(Number.isFinite)
+    ? {A:node.A!,B:node.B!,C:node.C!,D:node.D!,E:node.E!,F:node.F!}
+    : coefficientsFromEllipse(geom.center,geom.a,geom.b,geom.rotation);
+  const crossings=ellipseAxisCrossings(original);
+  const crossingText=ellipseAxisCrossingTex(original);
+  const angle=(node.tangentAngle??45)*Math.PI/180;
+  const lines=ellipseTangentNormal(geom,angle);
+  const nearAxis=(number:number)=>Math.abs(number)<1e-10;
+  const directrix=geom.directrixOffset===undefined ? "No definidas para e=0"
+    : nearAxis(Math.sin(geom.rotation))
+      ? "x="+exactScalarTex(geom.center[0])+"\\pm "+exactScalarTex(geom.directrixOffset)
+      : nearAxis(Math.cos(geom.rotation))
+        ? "y="+exactScalarTex(geom.center[1])+"\\pm "+exactScalarTex(geom.directrixOffset)
+        : "\\cos\\theta\\left(x"+(geom.center[0]<0?"+":"-")+
+          circleNumber(Math.abs(geom.center[0]))+"\\right)+\\sin\\theta\\left(y"+
+          (geom.center[1]<0?"+":"-")+circleNumber(Math.abs(geom.center[1]))+
+          "\\right)=\\pm "+exactScalarTex(geom.directrixOffset);
   return [
     {label:"Centro",value:coord(geom.center),math:true},
     {label:"Semieje mayor a",value:circleNumber(geom.a),math:true},
@@ -22,9 +45,14 @@ export function ellipseMetrics(node:ConicNode,geom:EllipseGeometry=resolveEllips
     {label:"Eje menor",value:circleNumber(2*geom.b),math:true},
     {label:"Área interior",value:circleNumber(geom.a*geom.b)+"\\pi",math:true},
     {label:"Lado recto",value:circleNumber(geom.latusRectum),math:true},
-    {label:"Directrices",value:geom.directrixOffset===undefined?
-      "No definidas para e=0":"X=\\pm "+circleNumber(geom.directrixOffset),math:geom.directrixOffset!==undefined},
+    {label:"Directrices",value:directrix,math:geom.directrixOffset!==undefined},
     {label:"Orientación",value:degreesToPiRadians(geom.rotation*180/Math.PI),math:true},
+    {label:"Cortes con eje X",value:crossingText.x,math:crossings.x.length>0},
+    {label:"Cortes con eje Y",value:crossingText.y,math:crossings.y.length>0},
+    {label:"Tangente · ecuación",value:circleLineTex(lines.tangent),math:true},
+    {label:"Normal · ecuación",value:circleLineTex(lines.normal),math:true},
+    {label:"Punto de tangencia",value:coord(lines.point),math:true},
+    {label:"Parámetros",value:ellipseParametricTex(geom),math:true},
   ];
 }
 
@@ -59,7 +87,8 @@ export function buildEllipseReport(node:ConicNode,geom:EllipseGeometry=resolveEl
   const heading=document.createElement("div");heading.className="bwjm-circle-report-header";
   const title=document.createElement("h3");title.textContent="Propiedades de la elipse";
   const definition=document.createElement("span");definition.className="bwjm-circle-mode";
-  definition.textContent=node.mode==="foci"?"Dos focos y suma de distancias":"Centro y semiejes";
+  definition.textContent=node.mode==="foci"?"Dos focos y suma de distancias":
+    node.mode==="general"?"Ecuación general":"Centro y semiejes";
   heading.append(title,definition);panel.appendChild(heading);
   if(node.showEquation!==false){
     const block=document.createElement("div");block.className="bwjm-circle-main-equation";
@@ -89,15 +118,26 @@ export function buildEllipseReport(node:ConicNode,geom:EllipseGeometry=resolveEl
   panel.appendChild(details);
   panel.appendChild(group("Vértices y directrices",
     by("Vértices","Co-vértices","Directrices"),"bwjm-circle-general"));
+  panel.appendChild(group("Intersecciones con los ejes",
+    by("Cortes con eje X","Cortes con eje Y"),"bwjm-circle-general"));
   if(node.showEquation!==false){
     panel.appendChild(group("Ecuación general",[
       {label:"Forma general",value:geom.generalTex,math:true}
     ],"bwjm-circle-general"));
   }
-  if(node.showTangent){
-    panel.appendChild(group("Tangente",[
-      {label:"Parámetro angular",value:degreesToPiRadians(node.tangentAngle??45),math:true}
-    ],"bwjm-circle-angles"));
+  if(node.showTangent || node.showNormal){
+    const items:EllipseMetric[]=[
+      {label:"Parámetro angular",value:degreesToPiRadians(node.tangentAngle??45),math:true},
+      ...by("Punto de tangencia"),
+      ...(node.showTangent?by("Tangente · ecuación"):[]),
+      ...(node.showNormal?by("Normal · ecuación"):[]),
+    ];
+    panel.appendChild(group("Rectas en el punto seleccionado",
+      items,"bwjm-circle-angles"));
+  }
+  if(node.showParametric){
+    panel.appendChild(group("Parametrización",
+      by("Parámetros"),"bwjm-circle-general"));
   }
   return panel;
 }

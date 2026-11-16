@@ -1,4 +1,5 @@
 import type { ConicNode } from "@mathmd/ast";
+import { coefficientsFromEllipse, ellipseFromGeneral, type EllipseCoefficients } from "./ellipseEquation.js";
 
 export interface EllipseGeometry {
   center: [number,number];
@@ -49,8 +50,8 @@ export function ellipseFromCenter(
   const [h,k]=center;
   const x=shifted("x",h),y=shifted("y",k);
   const near=(v:number,target:number)=>Math.abs(Math.sin(v-target))<1e-10;
-  const horizontal=near(theta,0) && Math.cos(theta)>0;
-  const vertical=near(theta,Math.PI/2) && Math.sin(theta)>0;
+  const horizontal=near(theta,0);
+  const vertical=near(theta,Math.PI/2);
   const denominatorA=fmt(a*a),denominatorB=fmt(b*b);
   const canonicalTex=horizontal
     ?"\\frac{"+x+"^2}{"+denominatorA+"}+\\frac{"+y+"^2}{"+denominatorB+"}=1"
@@ -60,9 +61,7 @@ export function ellipseFromCenter(
   const tCos=fmt(Math.cos(theta)),tSin=fmt(Math.sin(theta));
   const transformTex=!horizontal&&!vertical
     ?"X="+tCos+x+"+"+tSin+y+",\\quad Y=-"+tSin+x+"+"+tCos+y : undefined;
-  const ct=Math.cos(theta),st=Math.sin(theta),aa=b*b,bb=a*a;
-  const A=aa*ct*ct+bb*st*st, B=2*(aa-bb)*ct*st,C=aa*st*st+bb*ct*ct;
-  const D=-2*A*h-B*k,E=-B*h-2*C*k,F=A*h*h+B*h*k+C*k*k-a*a*b*b;
+  const {A,B,C,D,E,F}=coefficientsFromEllipse(center,a,b,theta);
   const generalTex=[
     addTerm(A,"x^2",true),addTerm(B,"xy"),addTerm(C,"y^2"),
     addTerm(D,"x"),addTerm(E,"y"),addTerm(F,"")
@@ -91,7 +90,16 @@ export function ellipseFromFoci(
 
 /** Existing canonical documents stay valid; focal documents derive their actual axes. */
 export function resolveEllipse(node:Pick<ConicNode,"mode"|"center"|"semiMajorAxis"|
- "semiMinorAxis"|"axis"|"rotation"|"focus1"|"focus2"|"sumDistances">):EllipseGeometry {
+ "semiMinorAxis"|"axis"|"rotation"|"focus1"|"focus2"|"sumDistances"|
+ "A"|"B"|"C"|"D"|"E"|"F">):EllipseGeometry {
+  if(node.mode==="general"){
+    if([node.A,node.B,node.C,node.D,node.E,node.F].some(v=>v===undefined))
+      throw new Error("La ecuación general requiere seis coeficientes.");
+    const result=ellipseFromGeneral({
+      A:node.A!,B:node.B!,C:node.C!,D:node.D!,E:node.E!,F:node.F!,
+    });
+    return ellipseFromCenter(result.center,result.a,result.b,"x",result.rotation);
+  }
   if(node.mode==="foci"){
     if(!node.focus1||!node.focus2||!node.sumDistances)
       throw new Error("La definición por focos requiere dos focos y suma de distancias.");
@@ -101,13 +109,17 @@ export function resolveEllipse(node:Pick<ConicNode,"mode"|"center"|"semiMajorAxi
     node.semiMinorAxis??2,node.axis??"x",node.rotation??0);
 }
 
-export function serializeEllipseBlock(mode:"canonical"|"foci",
+export function serializeEllipseBlock(mode:"canonical"|"foci"|"general",
   geometry:EllipseGeometry,options:Record<string,number|boolean|string>,
-  foci?:{focus1:[number,number];focus2:[number,number];sumDistances:number}):string {
+  foci?:{focus1:[number,number];focus2:[number,number];sumDistances:number},
+  general?:EllipseCoefficients):string {
   const rows=["```conic","conicType: ellipse","mode: "+mode];
   if(mode==="foci" && foci){
     rows.push("focus1: "+JSON.stringify(foci.focus1),"focus2: "+JSON.stringify(foci.focus2),
       "sumDistances: "+foci.sumDistances);
+  }else if(mode==="general" && general){
+    for(const key of ["A","B","C","D","E","F"] as const)
+      rows.push(key+": "+general[key]);
   }else{
     rows.push("center: "+JSON.stringify(geometry.center),
       "semiMajorAxis: "+geometry.a,"semiMinorAxis: "+geometry.b,

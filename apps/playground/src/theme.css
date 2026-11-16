@@ -4118,3 +4118,41 @@ code.bwjm-property-value {
   font-size: .75rem;
   color: var(--text-secondary);
 }
+
+
+/* Direct manipulation of conic control points. Keep labels and equations readable. */
+.bwjm-ellipse-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+.bwjm-ellipse-drag-handle:hover,
+.bwjm-ellipse-drag-handle:focus-visible {
+  stroke: #f59e0b;
+  stroke-width: 2px;
+  outline: none;
+}
+.bwjm-ellipse-dragging,
+.bwjm-ellipse-dragging .bwjm-ellipse-drag-handle {
+  cursor: grabbing;
+  user-select: none;
+  touch-action: none;
+}
+.bwjm-ellipse-report .bwjm-circle-detail-list dd {
+  max-width: 74%;
+  min-width: 0;
+  overflow-x: auto;
+}
+.bwjm-ellipse-report .bwjm-circle-main-equation-math {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.bwjm-ellipse-report .bwjm-circle-general .katex-display {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.bwjm-ellipse-composer .bwjm-modal-field > small {
+  display: block;
+  font-size: .74rem;
+  color: var(--text-secondary);
+  margin-top: .3rem;
+}

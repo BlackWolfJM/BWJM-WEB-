@@ -3,6 +3,9 @@ import { parseMathMD } from "@mathmd/parser";
 import type { ConicNode } from "@mathmd/ast";
 import { circleFromCenterRadius, resolveCircle, type CircleGeometry } from "./circleGeometry.js";
 import type { CircleInteraction } from "./circleDrag.js";
+import { ellipseFromCenter, resolveEllipse, type EllipseGeometry } from "./ellipseGeometry.js";
+import { coefficientsFromEllipse } from "./ellipseEquation.js";
+import type { EllipseInteraction } from "./ellipseDrag.js";
 
 type GraphOptionValue = boolean | number | string | readonly number[];
 
@@ -109,6 +112,7 @@ export function updateGraphOption(
       "showCenter","showRadius","showDiameter","showChord","showSecant",
       "showTangent","showIntersections","showEquation","showInteractiveControls",
       "showFocus","showVertices","showAxes","showDirectrices","showCoVertices","showLatusRectum",
+      "showNormal","showParametric",
     ]);
     if (!allowed.has(key) || typeof value !== "boolean") return source;
     const updated=updateGraphField(source,range,blockType,key,value);
@@ -290,4 +294,55 @@ export function updateCircleInteraction(
        Math.abs(result.radius-radius)>1e-6)return source;
   }catch{return source;}
   return next;
+}
+
+
+/** One validated, mode-preserving update for ellipse pointer/keyboard interactions. */
+export function updateEllipseInteraction(
+  source:string,range:SourceRange,node:ConicNode,
+  original:EllipseGeometry,change:EllipseInteraction,
+):string{
+  const center=change.center??original.center;
+  const a=change.a??original.a,b=change.b??original.b;
+  let nextGeometry:EllipseGeometry;
+  try{nextGeometry=ellipseFromCenter(center,a,b,"x",original.rotation);}catch{return source;}
+  const patches:Array<[string,GraphOptionValue]>=[];
+  if(change.center||change.a!==undefined||change.b!==undefined){
+    if(node.mode==="foci"){
+      patches.push(["focus1",nextGeometry.focus1],["focus2",nextGeometry.focus2],
+        ["sumDistances",2*nextGeometry.a]);
+    }else if(node.mode==="general"){
+      const baseline=coefficientsFromEllipse(original.center,original.a,original.b,original.rotation);
+      const factor=(node.A??baseline.A)/baseline.A;
+      const next=coefficientsFromEllipse(center,a,b,original.rotation);
+      for(const key of ["A","B","C","D","E","F"] as const)
+        patches.push([key,next[key]*factor]);
+    }else if(node.mode==="canonical"||node.mode==="center-axes"){
+      patches.push(["center",center],["semiMajorAxis",a],["semiMinorAxis",b]);
+    }else return source;
+  }
+  if(change.tangentAngle!==undefined){
+    if(!Number.isFinite(change.tangentAngle)||Math.abs(change.tangentAngle)>3600)return source;
+    patches.push(["tangentAngle",change.tangentAngle]);
+  }
+  if(patches.length===0)return source;
+  if(!node.viewCenter)patches.push(["viewCenter",original.center]);
+  if(!node.viewSpan)patches.push(["viewSpan",Math.max(4,original.a*1.7,original.b*2,
+    node.showDirectrices&&original.directrixOffset!==undefined&&
+      original.directrixOffset<=original.a*4?original.directrixOffset*1.15:0)]);
+  let nextSource=source,current=range;
+  for(const [key,value] of patches){
+    const changed=updateGraphField(nextSource,current,"conic",key,value);
+    current={...current,end:{...current.end,offset:current.end.offset+changed.length-nextSource.length}};
+    nextSource=changed;
+  }
+  const parsed=parseMathMD(nextSource.slice(range.start.offset,current.end.offset)).children[0];
+  if(parsed?.type!=="conic"||parsed.conicType!=="ellipse")return source;
+  try{
+    const verified=resolveEllipse(parsed);
+    const delta=Math.hypot(verified.center[0]-center[0],verified.center[1]-center[1]);
+    if(delta>1e-5*Math.max(1,a)||Math.abs(verified.a-a)>1e-5*Math.max(1,a)||
+      Math.abs(verified.b-b)>1e-5*Math.max(1,b))return source;
+  }catch{return source;}
+  return nextSource;
 }

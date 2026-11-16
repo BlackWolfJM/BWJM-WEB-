@@ -36,7 +36,7 @@ import { DocumentTabs } from "./DocumentTabs.js";
 import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
 import { createCrossProductDeterminant, createCrossProductEditor, createCrossProductReport } from "./CrossProductEditor.js";
 import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
-import { resetSurfaceColor, updateCircleInteraction, updateEllipseDimensions, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
+import { resetSurfaceColor, updateCircleInteraction, updateEllipseInteraction, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
@@ -49,6 +49,7 @@ import { buildEllipseReport } from "./ellipseReport.js";
 import { createEllipseSVG } from "./ellipseFigure.js";
 import { resolveEllipse } from "./ellipseGeometry.js";
 import { mountEllipseControls } from "./ellipseControls.js";
+import { mountEllipseDrag, type EllipseInteraction } from "./ellipseDrag.js";
 import { mountCircleControls } from "./circleControls.js";
 import { mountCircleDrag, type CircleInteraction } from "./circleDrag.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
@@ -1388,8 +1389,11 @@ initialConditions:
             ["showDirectrices", "Directrices"],
             ["showLatusRectum", "Lados rectos"],
             ["showTangent", "Tangente"],
+            ["showNormal", "Normal"],
+            ["showIntersections", "Intersecciones con los ejes"],
+            ["showParametric", "Parametrización"],
             ["showEquation", "Ecuación"],
-            ["showInteractiveControls", "Trasladar y cambiar semiejes"],
+            ["showInteractiveControls", "Arrastrar centro y puntos geométricos"],
           ] : node.type === "line3d" ? [
             ["showPoint", "Mostrar punto P"],
             ["showDirection", "Mostrar vector director v"],
@@ -2076,20 +2080,28 @@ initialConditions:
             const geometry = resolveEllipse(node);
             let report = buildEllipseReport(node,geometry);
             cardBody.appendChild(report);
+            const previewEllipse = (next:typeof geometry,change:EllipseInteraction={}) => {
+              const visualNode={...node,tangentAngle:change.tangentAngle??node.tangentAngle,
+                viewCenter:node.viewCenter??geometry.center,
+                viewSpan:node.viewSpan??Math.max(4,geometry.a*1.7,geometry.b*2,
+                  node.showDirectrices&&geometry.directrixOffset!==undefined&&
+                  geometry.directrixOffset<=geometry.a*4?geometry.directrixOffset*1.15:0)};
+              const fresh = createEllipseSVG(visualNode,next);
+              figure.replaceWith(fresh);
+              figure = fresh;
+              const updatedReport = buildEllipseReport(visualNode,next);
+              report.replaceWith(updatedReport);
+              report = updatedReport;
+            };
+            const persistEllipse = (change:EllipseInteraction) => {
+              openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
+              setMarkdown(previous => updateEllipseInteraction(previous,node.range,
+                node,geometry,change));
+            };
+            mountEllipseDrag(cardBody,node,geometry,previewEllipse,persistEllipse);
             mountEllipseControls(cardBody,node,geometry,
-              next => {
-                const fresh = createEllipseSVG(node,next);
-                figure.replaceWith(fresh);
-                figure = fresh;
-                const updatedReport = buildEllipseReport(node,next);
-                report.replaceWith(updatedReport);
-                report = updatedReport;
-              },
-              (center,a,b) => {
-                openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
-                setMarkdown(previous => updateEllipseDimensions(previous,node.range,
-                  [center[0],center[1]],a,b));
-              });
+              next => previewEllipse(next,{center:next.center,a:next.a,b:next.b}),
+              (center,a,b) => persistEllipse({center:[center[0],center[1]],a,b}));
           }
           const button = document.createElement("button");
           button.type = "button";

@@ -485,6 +485,8 @@ export interface ConicNode extends MathMDNodeBase {
   showDirectrices?: boolean;
   showCoVertices?: boolean;
   showLatusRectum?: boolean;
+  showNormal?: boolean;
+  showParametric?: boolean;
   /** Circle-only annotation layers; undefined means the layer is disabled. */
   showRadius?: boolean;
   showDiameter?: boolean;
@@ -1746,6 +1748,8 @@ export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   showDirectrices: z.boolean().optional(),
   showCoVertices: z.boolean().optional(),
   showLatusRectum: z.boolean().optional(),
+  showNormal: z.boolean().optional(),
+  showParametric: z.boolean().optional(),
   showRadius: z.boolean().optional(),
   showDiameter: z.boolean().optional(),
   showChord: z.boolean().optional(),
@@ -1868,6 +1872,32 @@ export function validateConic(data: any, ctx: z.RefinementCtx): void {
       !data.tangentPoint) {
     ctx.addIssue({ code: z.ZodIssueCode.custom,
       message: "El modo de tangente por punto requiere las coordenadas del punto", path: ["tangentPoint"] });
+  }
+  if (type === "ellipse" && mode === "foci" && data.focus1 && data.focus2) {
+    const dist = Math.hypot(data.focus2[0]-data.focus1[0],data.focus2[1]-data.focus1[1]);
+    if (data.sumDistances === undefined || data.sumDistances <= dist) {
+      ctx.addIssue({ code:z.ZodIssueCode.custom,
+        message:"La suma de distancias debe ser mayor que la distancia entre los focos",
+        path:["sumDistances"] });
+    }
+  }
+  if (type === "ellipse" && mode === "general" &&
+      [data.A,data.B,data.C,data.D,data.E,data.F].every(Number.isFinite)) {
+    const sign=data.A<0?-1:1;
+    const A=sign*data.A,B=sign*data.B,C=sign*data.C,
+      D=sign*data.D,E=sign*data.E,F=sign*data.F;
+    const det=4*A*C-B*B,scale=Math.max(1,Math.abs(A),Math.abs(B),Math.abs(C));
+    if (A<=1e-13*scale || det<=1e-12*scale*scale) {
+      ctx.addIssue({code:z.ZodIssueCode.custom,
+        message:"La ecuación debe tener parte cuadrática definida positiva",path:["mode"]});
+    } else {
+      const h=(B*E-2*C*D)/det,k=(B*D-2*A*E)/det;
+      const squared=A*h*h+B*h*k+C*k*k-F;
+      if (!Number.isFinite(squared)||squared<=1e-12*Math.max(1,Math.abs(F),Math.abs(squared))) {
+        ctx.addIssue({code:z.ZodIssueCode.custom,
+          message:"La ecuación no define una elipse real",path:["mode"]});
+      }
+    }
   }
   // Validate conicType consistency with mode
   if (mode === "center-radius" && data.conicType && data.conicType !== "circle") {
