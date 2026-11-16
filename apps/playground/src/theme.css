@@ -4202,3 +4202,37 @@ code.bwjm-property-value {
   .bwjm-parabola-composer .bwjm-modal-grid { grid-template-columns: minmax(0,1fr); }
   .bwjm-parabola-report .bwjm-circle-details { grid-template-columns: minmax(0,1fr); }
 }
+
+
+/* Hyperbola follows the same restrained scientific presentation as other conics. */
+.bwjm-hyperbola-composer { display:grid; gap:.85rem; min-width:0; }
+.bwjm-hyperbola-composer .bwjm-modal-grid { align-items:start; }
+.bwjm-hyperbola-options label {
+  display:flex; align-items:center; gap:.4rem;
+  min-height:26px; font-size:.8rem;
+}
+.bwjm-hyperbola-options input[type="checkbox"] { flex:none; }
+.bwjm-hyperbola-composer .bwjm-modal-field > small,
+.bwjm-hyperbola-note {
+  font-size:.75rem; color:var(--text-secondary); margin:.2rem 0 .6rem;
+}
+.bwjm-hyperbola-preview-report { min-width:0; margin-top:.7rem; }
+.bwjm-hyperbola-report .bwjm-circle-main-equation-math,
+.bwjm-hyperbola-report .bwjm-circle-detail-list dd {
+  min-width:0; overflow-x:auto;
+}
+.bwjm-hyperbola-report .bwjm-circle-detail-list dd { max-width:75%; }
+.bwjm-hyperbola-report .bwjm-circle-details { gap:1rem 1.35rem; }
+.bwjm-hyperbola-drag-handle { cursor:grab; touch-action:none; }
+.bwjm-hyperbola-drag-handle:hover,
+.bwjm-hyperbola-drag-handle:focus-visible {
+  stroke:#f59e0b; stroke-width:2px; outline:none;
+}
+.bwjm-hyperbola-dragging,
+.bwjm-hyperbola-dragging .bwjm-hyperbola-drag-handle {
+  cursor:grabbing; touch-action:none; user-select:none;
+}
+@media (max-width:680px) {
+  .bwjm-hyperbola-composer .bwjm-modal-grid,
+  .bwjm-hyperbola-report .bwjm-circle-details { grid-template-columns:minmax(0,1fr); }
+}
