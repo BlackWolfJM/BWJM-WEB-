@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { CircleComposer } from "./CircleComposer.js";
 
 type Kind = "circle"|"ellipse"|"parabola"|"hyperbola";
 interface Props { onClose: () => void; onInsert: (block: string) => void }
@@ -57,6 +58,7 @@ export function ConicModal({onClose,onInsert}:Props) {
             {choices.map(([value,label])=><option key={value} value={value}>{label}</option>)}
           </select>
         </label>
+        {kind === "circle" ? <CircleComposer onInsert={onInsert} onClose={onClose}/> : <>
         <div className="bwjm-modal-grid">
           {field("Centro o vértice: x",h,setH)}
           {field("Centro o vértice: y",k,setK)}
@@ -82,6 +84,7 @@ export function ConicModal({onClose,onInsert}:Props) {
         <button className="bwjm-btn-secondary" onClick={onClose}>Cancelar</button>
         <button className="bwjm-btn-primary" disabled={invalid} onClick={insert}>Insertar en documento</button>
       </footer>
+      </>}
     </section>
   </div>;
 }
