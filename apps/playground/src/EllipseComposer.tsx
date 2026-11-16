@@ -19,7 +19,7 @@ export function EllipseComposer({onInsert,onClose}:Props){
   const [flags,setFlags]=useState({
     showCenter:true,showFocus:true,showVertices:true,showCoVertices:true,
     showAxes:true,showDirectrices:false,showLatusRectum:false,
-    showTangent:false,showEquation:true,
+    showTangent:false,showEquation:true,showInteractiveControls:true,
   });
   const [tangentAngle,setTangentAngle]=useState("45");
   const [color,setColor]=useState("#2563eb");
@@ -44,7 +44,8 @@ export function EllipseComposer({onInsert,onClose}:Props){
       Math.abs(Number(tangentAngle))>3600)
       throw new Error("El ángulo de tangencia debe ser finito y estar entre −3600° y 3600°.");
   }catch(e){error=e instanceof Error?e.message:String(e);}
-  const options={...flags,tangentAngle:Number(tangentAngle),color};
+  const options={...flags,showInteractiveControls:mode==="canonical"&&flags.showInteractiveControls,
+    tangentAngle:Number(tangentAngle),color};
   useEffect(()=>{
     if(!previewRef.current||!reportRef.current)return;
     previewRef.current.replaceChildren();
@@ -118,6 +119,7 @@ export function EllipseComposer({onInsert,onClose}:Props){
         {toggle("showLatusRectum","Lados rectos")}
         {toggle("showTangent","Tangente")}
         {toggle("showEquation","Mostrar ecuación")}
+        {mode==="canonical"&&toggle("showInteractiveControls","Trasladar y cambiar semiejes")}
       </div>
     </fieldset>
     {flags.showTangent&&numeric("Ángulo del punto de tangencia (°)",tangentAngle,setTangentAngle)}
