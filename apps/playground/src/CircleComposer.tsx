@@ -5,6 +5,7 @@ import { circleFromCenterRadius, circleFromCoefficients, circleFromThreePoints,
 import { createCircleSVG } from "./circleFigure.js";
 import { buildCircleReport } from "./circleReport.js";
 import { tangentsFromPoint } from "./circleConstructions.js";
+import { mountCircleDrag, type CircleInteraction } from "./circleDrag.js";
 
 type CircleMode = "center-radius" | "canonical" | "general" | "three-points";
 interface Props { onInsert: (source:string)=>void; onClose:()=>void }
@@ -70,16 +71,50 @@ export function CircleComposer({onInsert,onClose}:Props) {
       error="Los extremos de cada cuerda o secante deben ser distintos.";
   }
   useEffect(()=>{
-    if(!previewRef.current||!reportRef.current)return;
-    previewRef.current.replaceChildren();
-    reportRef.current.replaceChildren();
+    const previewElement=previewRef.current,reportElement=reportRef.current;
+    if(!previewElement||!reportElement)return;
+    previewElement.replaceChildren();
+    reportElement.replaceChildren();
     if(!geometry||error)return;
-    const node={
-      conicType:"circle",mode,
-      ...settings,
-    } as ConicNode;
-    previewRef.current.appendChild(createCircleSVG(node,geometry));
-    reportRef.current.appendChild(buildCircleReport(node,geometry));
+    const node={type:"conic",conicType:"circle",mode,...settings} as ConicNode;
+    const original=geometry;
+    const updatePreview=(next:CircleGeometry,change:CircleInteraction={})=>{
+      const viewNode={
+        ...node,...change.angles,
+        tangentPoint:change.tangentPoint??node.tangentPoint,
+        viewCenter:node.viewCenter??original.center,
+        viewSpan:node.viewSpan??Math.max(3,original.radius*1.55),
+      };
+      previewElement.replaceChildren(createCircleSVG(viewNode,next));
+      reportElement.replaceChildren(buildCircleReport(viewNode,next));
+    };
+    previewElement.appendChild(createCircleSVG(node,original));
+    reportElement.appendChild(buildCircleReport(node,original));
+    return mountCircleDrag(previewElement,node,original,updatePreview,change=>{
+      if(change.angles)setAngles(previous=>({...previous,...change.angles}));
+      if(change.tangentPoint)setTangentInput(change.tangentPoint.map(String) as [string,string]);
+      if(change.center||change.radius){
+        const next=circleFromCenterRadius(change.center??original.center,
+          change.radius??original.radius);
+        if(mode==="center-radius"){
+          setH(String(next.center[0]));setK(String(next.center[1]));
+          setRadius(String(next.radius));
+        }else if(mode==="canonical"){
+          setCanonical(next.canonicalTex);
+        }else if(mode==="general"){
+          setGeneral(next.generalTex);
+        }else{
+          const scale=next.radius/original.radius;
+          const transform=(p:[string,string]):[string,string]=>[
+            String(next.center[0]+scale*(Number(p[0])-original.center[0])),
+            String(next.center[1]+scale*(Number(p[1])-original.center[1])),
+          ];
+          setPointA(previous=>transform(previous));
+          setPointB(previous=>transform(previous));
+          setPointC(previous=>transform(previous));
+        }
+      }
+    });
   });
   const numeric=(label:string,value:string,setter:(value:string)=>void)=>
     <label className="bwjm-modal-field">
