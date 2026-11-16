@@ -62,13 +62,13 @@ export function ConicModal({onClose,onInsert}:Props) {
         <div className="bwjm-modal-grid">
           {field("Centro o vértice: x",h,setH)}
           {field("Centro o vértice: y",k,setK)}
-          {kind!=="parabola"&&field(kind==="circle"?"Radio":"Semieje a",a,setA)}
+          {kind!=="parabola"&&field("Semieje a",a,setA)}
           {(kind==="ellipse"||kind==="hyperbola")&&field("Semieje b",b,setB)}
           {kind==="parabola"&&field("Parámetro focal p (con signo)",p,setP)}
-          {kind!=="circle"&&<label className="bwjm-modal-field"><span className="bwjm-modal-label">Eje principal</span>
+          <label className="bwjm-modal-field"><span className="bwjm-modal-label">Eje principal</span>
             <select className="bwjm-modal-input" value={axis} onChange={e=>setAxis(e.target.value as "x"|"y")}>
               <option value="x">Horizontal</option><option value="y">Vertical</option>
-            </select></label>}
+            </select></label>
           {(kind==="ellipse"||kind==="hyperbola")&&field("Rotación (radianes)",rotation,setRotation)}
         </div>
         <fieldset><legend>Mostrar propiedades geométricas</legend>
