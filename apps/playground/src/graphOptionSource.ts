@@ -3,10 +3,10 @@ import { parseMathMD } from "@mathmd/parser";
 
 type GraphOptionValue = boolean | number | string | readonly number[];
 
-type SupportedBlock = "curve3d" | "surface3d" | "parametric2d" | "vector2d" | "vector3d" |
+type SupportedBlock = "conic" | "curve3d" | "surface3d" | "parametric2d" | "vector2d" | "vector3d" |
   "crossproduct" | "line3d" | "plane3d" | "plot2d" | "vectorfield2d" | "flow2d" | "datachart" | "calculusviz";
 const colorBlocks = new Set<SupportedBlock>([
-  "plot2d", "surface3d", "curve3d", "parametric2d", "vectorfield2d", "flow2d", "datachart", "calculusviz",
+  "conic", "plot2d", "surface3d", "curve3d", "parametric2d", "vectorfield2d", "flow2d", "datachart", "calculusviz",
 ]);
 const crossProductOptions = new Set([
   "showPlane", "showNormal", "showArea", "showTriangle", "showVolume", "showSteps",
@@ -101,6 +101,17 @@ export function updateGraphOption(
     if (typeof value !== "string" || !/^#[\da-f]{6}$/i.test(value)) return source;
     return updateGraphField(source, range, blockType, key, value);
   }
+  if (blockType === "conic") {
+    const allowed=new Set([
+      "showCenter","showRadius","showDiameter","showChord","showSecant",
+      "showTangent","showIntersections","showEquation","showInteractiveControls",
+    ]);
+    if (!allowed.has(key) || typeof value !== "boolean") return source;
+    const updated=updateGraphField(source,range,blockType,key,value);
+    const end=range.end.offset+updated.length-source.length;
+    const parsed=parseMathMD(updated.slice(range.start.offset,end)).children[0];
+    return parsed?.type==="conic" ? updated : source;
+  }
   if (blockType === "crossproduct") {
     if (!crossProductOptions.has(key)) return source;
     const updated = updateGraphField(source, range, blockType, key, value);
@@ -167,4 +178,21 @@ export function updateGraphNumericOption(
   if (key !== "trailLength" || !Number.isInteger(value) ||
     value < 2 || value > 500) return source;
   return updateGraphField(source, range, blockType, key, value);
+}
+
+
+/** Numeric circle controls persist center/radius into the same .bwjm block. */
+export function updateCircleDimensions(
+  source:string,range:SourceRange,center:readonly [number,number],radius:number,
+):string {
+  if(!center.every(Number.isFinite)||!Number.isFinite(radius)||radius<=0||radius>10000||
+    center.some(v=>Math.abs(v)>10000))return source;
+  const first=updateGraphField(source,range,"conic","center",center);
+  const rangeAfter={...range,end:{...range.end,offset:range.end.offset+first.length-source.length}};
+  const second=updateGraphField(first,rangeAfter,"conic","radius",radius);
+  const end=range.end.offset+second.length-source.length;
+  const parsed=parseMathMD(second.slice(range.start.offset,end)).children[0];
+  return parsed?.type==="conic"&&
+    parsed.mode!=="general"&&parsed.mode!=="three-points"&&
+    parsed.radius===radius&&parsed.center?.every((v,i)=>v===center[i])?second:source;
 }
