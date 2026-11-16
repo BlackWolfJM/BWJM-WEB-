@@ -103,8 +103,9 @@ export function HyperbolaComposer({onInsert,onClose}:Props){
             original.center,original.a,original.b,original.rotation);
           const baseline=hyperbolaCoefficients(original.center,original.a,
             original.b,original.rotation);
-          const key=(["A","B","C"] as const).reduce((selected,current)=>
-            Math.abs(baseline[current])>Math.abs(baseline[selected])?current:selected,"A" as const);
+          const keys:Array<"A"|"B"|"C">=["A","B","C"];
+          const key=keys.reduce((selected,current)=>
+            Math.abs(baseline[current])>Math.abs(baseline[selected])?current:selected,"A");
           const factor=originalCoeffs[key]/baseline[key];
           const generated=hyperbolaCoefficients(next.center,next.a,next.b,next.rotation);
           const coefficients=Object.fromEntries(Object.entries(generated)
