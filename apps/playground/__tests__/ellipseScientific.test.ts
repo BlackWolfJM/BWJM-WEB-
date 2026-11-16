@@ -8,7 +8,7 @@ import { EllipseComposer } from "../src/EllipseComposer.js";
 import { ellipseFromCenter, ellipseFromFoci, resolveEllipse,
   serializeEllipseBlock } from "../src/ellipseGeometry.js";
 import { ellipseMetrics } from "../src/ellipseReport.js";
-import { updateGraphOption } from "../src/graphOptionSource.js";
+import { updateEllipseDimensions, updateGraphOption } from "../src/graphOptionSource.js";
 
 describe("Ellipses for scientific notes",()=>{
   it("derives canonical shape, foci, directrices and major axes",()=>{
@@ -61,6 +61,14 @@ describe("Ellipses for scientific notes",()=>{
     expect(resolveEllipse(ellipse).center).toEqual([1,2]);
     const changed=updateGraphOption(src,ellipse.range,"conic","showLatusRectum",false);
     expect(parseMathMD(changed).children[0]).toMatchObject({showLatusRectum:false});
+    const modifiedNode=parseMathMD(changed).children[0];
+    const moved=updateEllipseDimensions(changed,modifiedNode.range,[2,-1],6,3);
+    const updated=parseMathMD(moved);
+    expect(updated.diagnostics.filter(d=>d.severity==="error")).toEqual([]);
+    expect(updated.children[0]).toMatchObject({
+      type:"conic",center:[2,-1],semiMajorAxis:6,semiMinorAxis:3,
+    });
+    expect(resolveEllipse(updated.children[0] as ConicNode).center).toEqual([2,-1]);
   });
   it("keeps focal parameters instead of saving unrelated defaults",()=>{
     const geom=ellipseFromFoci([-3,0],[3,0],10);
