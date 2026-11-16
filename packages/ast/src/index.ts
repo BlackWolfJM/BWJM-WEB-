@@ -483,6 +483,22 @@ export interface ConicNode extends MathMDNodeBase {
   showAxes?: boolean;
   showAsymptotes?: boolean;
   showDirectrices?: boolean;
+  /** Circle-only annotation layers; undefined means the layer is disabled. */
+  showRadius?: boolean;
+  showDiameter?: boolean;
+  showChord?: boolean;
+  showSecant?: boolean;
+  showTangent?: boolean;
+  showIntersections?: boolean;
+  showEquation?: boolean;
+  showInteractiveControls?: boolean;
+  radiusAngle?: number;
+  diameterAngle?: number;
+  chordStartAngle?: number;
+  chordEndAngle?: number;
+  secantStartAngle?: number;
+  secantEndAngle?: number;
+  tangentAngle?: number;
   color?: string;
   colorFocus?: string;
   colorDirectrix?: string;
@@ -1555,6 +1571,16 @@ export function validatePlane3D(data: any, ctx: z.RefinementCtx): void {
       }
     }
   } else if (mode === "general") {
+    if (type === "circle" && [data.A,data.B,data.C,data.D,data.E,data.F].every(Number.isFinite)) {
+      const {A,B,C,D,E,F}=data;
+      const radiusSquared=(D*D+E*E)/(4*A*A)-F/A;
+      if (Math.abs(A)<1e-12 || Math.abs(A-C)>1e-8*Math.max(1,Math.abs(A)) ||
+          Math.abs(B)>1e-8*Math.max(1,Math.abs(A)) ||
+          !Number.isFinite(radiusSquared) || radiusSquared<=1e-12) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom,
+          message: "La ecuación no representa una circunferencia real de radio positivo", path: ["mode"] });
+      }
+    }
     if (data.A === undefined || data.B === undefined || data.C === undefined || data.D === undefined) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo general requiere A, B, C, D", path: ["mode"] });
     }
@@ -1721,6 +1747,21 @@ export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   showAxes: z.boolean().optional(),
   showAsymptotes: z.boolean().optional(),
   showDirectrices: z.boolean().optional(),
+  showRadius: z.boolean().optional(),
+  showDiameter: z.boolean().optional(),
+  showChord: z.boolean().optional(),
+  showSecant: z.boolean().optional(),
+  showTangent: z.boolean().optional(),
+  showIntersections: z.boolean().optional(),
+  showEquation: z.boolean().optional(),
+  showInteractiveControls: z.boolean().optional(),
+  radiusAngle: z.number().finite().min(-3600).max(3600).optional(),
+  diameterAngle: z.number().finite().min(-3600).max(3600).optional(),
+  chordStartAngle: z.number().finite().min(-3600).max(3600).optional(),
+  chordEndAngle: z.number().finite().min(-3600).max(3600).optional(),
+  secantStartAngle: z.number().finite().min(-3600).max(3600).optional(),
+  secantEndAngle: z.number().finite().min(-3600).max(3600).optional(),
+  tangentAngle: z.number().finite().min(-3600).max(3600).optional(),
   color: z.string().optional(),
   colorFocus: z.string().optional(),
   colorDirectrix: z.string().optional(),
