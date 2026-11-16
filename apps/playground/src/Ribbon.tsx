@@ -12,7 +12,7 @@ export type RibbonAction =
   | "h1" | "h2" | "h3" | "bold" | "italic" | "code" | "quote" | "list" | "rule"
   | "formula" | "graph" | "table" | "picture"
   | "equation" | "inline-math" | "matrix" | "integral" | "slider"
-  | "data-table" | "vectorfield" | "riemann"
+  | "data-table" | "vectorfield" | "riemann" | "conic"
   | "view-editor" | "view-split" | "view-reader" | "outline" | "inspector"
   | "theme-linear" | "theme-catppuccin" | "theme-tokyonight" | "commands";
 interface ActionSpec {
@@ -37,7 +37,7 @@ export const RIBBON_GROUPS: Record<RibbonTab, readonly RibbonGroup[]> = {
   Insertar: [
     {label:"Contenido",actions:[item("formula","Fórmula","formula","Ctrl+Mayús+M"),
       item("table","Tabla","list"),item("picture","Imagen","file")]},
-    {label:"Gráficos",actions:[item("graph","Gráficos y superficies","graph")]},
+    {label:"Gráficos",actions:[item("graph","Gráficos y superficies","graph"),item("conic","Cónicas","graph")]},
   ],
   Matemáticas: [
     {label:"Notación",actions:[item("equation","Ecuación","equation"),
