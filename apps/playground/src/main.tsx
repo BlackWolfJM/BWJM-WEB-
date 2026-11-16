@@ -41,7 +41,6 @@ import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
 import { FormulaModal } from "./FormulaModal.js";
-import { ConicModal } from "./ConicModal.js";
 import { createConicSVG } from "./conicFigure.js";
 import { createCircleSVG } from "./circleFigure.js";
 import { resolveCircle } from "./circleGeometry.js";
@@ -576,7 +575,6 @@ export function BWJMStudio() {
     setIsFormulaModalOpen(true);
   };
   const [isChartModalOpen, setIsChartModalOpen] = useState<boolean>(false);
-  const [isConicModalOpen, setIsConicModalOpen] = useState<boolean>(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState<boolean>(false);
   const [examplePickerOpen, setExamplePickerOpen] = useState(false);
   const [imageMessage, setImageMessage] = useState<string | null>(null);
@@ -999,7 +997,6 @@ initialConditions:
       case "rule": insertAtCursor("\n\n---\n\n"); break;
       case "formula": openFormulaComposer(); break;
       case "graph": setIsChartModalOpen(true); break;
-      case "conic": setIsConicModalOpen(true); break;
       case "table":
         insertAtCursor("\n\n| Columna 1 | Columna 2 |\n|---|---|\n| Dato 1 | Dato 2 |\n\n");
         break;
@@ -2737,10 +2734,6 @@ initialConditions:
         onInsert={(formulaText: string) => insertAtCursor(formulaText)}
       />
 
-      {isConicModalOpen && <ConicModal
-        onClose={() => setIsConicModalOpen(false)}
-        onInsert={(block: string) => insertAtCursor(block)}
-      />}
       <ChartModal
         isOpen={isChartModalOpen}
         documentVariables={doc.children.flatMap(node =>
