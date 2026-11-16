@@ -1,6 +1,6 @@
 import type { ConicNode } from "@mathmd/ast";
 import { circleFromCenterRadius, type CircleGeometry } from "./circleGeometry.js";
-import { angleAtCircle, type CircleAngleKey, type CirclePoint } from "./circleConstructions.js";
+import { angleAtCircle, circlePointAt, type CircleAngleKey, type CirclePoint } from "./circleConstructions.js";
 import { circleWorldAtSVG } from "./circleFigure.js";
 
 export interface CircleInteraction {
@@ -47,8 +47,8 @@ export function mountCircleDrag(
   mount:HTMLElement,node:ConicNode,original:CircleGeometry,
   preview:(geometry:CircleGeometry,change:CircleInteraction)=>void,
   persist:(change:CircleInteraction)=>void,
-):void {
-  if(node.showInteractiveControls!==true)return;
+):()=>void {
+  if(node.showInteractiveControls!==true)return ()=>{};
   let current:{
     pointer:number;handle:CircleHandle;start:CirclePoint;
     matrix:DOMMatrix;change:CircleInteraction|null;
@@ -103,10 +103,55 @@ export function mountCircleDrag(
     if(event.type==="pointerup"&&change)persist(change);
     else preview(original,{});
   };
+  const keyboard=(event:KeyboardEvent)=>{
+    const deltas:Record<string,CirclePoint>={
+      ArrowUp:[0,.1],ArrowDown:[0,-.1],ArrowLeft:[-.1,0],ArrowRight:[.1,0],
+    };
+    const displacement=deltas[event.key];
+    if(!displacement)return;
+    const target=event.target;
+    if(!(target instanceof Element))return;
+    const handle=target.getAttribute("data-handle") as CircleHandle|null;
+    if(!handle)return;
+    event.preventDefault();
+    const factor=event.shiftKey?10:1;
+    const direction:CirclePoint=[
+      displacement[0]*factor,displacement[1]*factor,
+    ];
+    let initial:CirclePoint=original.center;
+    if(handle==="tangentPoint")initial=node.tangentPoint??original.center;
+    else if(handle!=="center"){
+      const value=(node as unknown as Record<string,unknown>)[handle];
+      initial=circlePointAt(original,typeof value==="number"?value:
+        handle==="radiusAngle"?30:handle==="diameterAngle"?0:
+        handle==="chordStartAngle"?35:handle==="chordEndAngle"?140:
+        handle==="secantStartAngle"?220:handle==="secantEndAngle"?300:60);
+    }
+    const next:CirclePoint=[
+      initial[0]+direction[0],initial[1]+direction[1],
+    ];
+    const change=circleDragChange(handle,original,next,initial);
+    if(!change)return;
+    const center=change.center??original.center;
+    const radius=change.radius??original.radius;
+    if(change.tangentPoint&&node.tangentMode==="point"&&
+      Math.hypot(change.tangentPoint[0]-center[0],change.tangentPoint[1]-center[1])
+        <radius-1e-9*Math.max(1,radius))return;
+    try{preview(circleFromCenterRadius(center,radius),change);}catch{return;}
+    persist(change);
+  };
   mount.addEventListener("pointerdown",down);
   mount.addEventListener("pointermove",move);
   mount.addEventListener("pointerup",end);
   mount.addEventListener("pointercancel",end);
   mount.addEventListener("lostpointercapture",end);
-  // Mount is owned by the current document card, so listeners disappear when card is recreated.
+  mount.addEventListener("keydown",keyboard);
+  return ()=>{
+    mount.removeEventListener("pointerdown",down);
+    mount.removeEventListener("pointermove",move);
+    mount.removeEventListener("pointerup",end);
+    mount.removeEventListener("pointercancel",end);
+    mount.removeEventListener("lostpointercapture",end);
+    mount.removeEventListener("keydown",keyboard);
+  };
 }
