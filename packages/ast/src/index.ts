@@ -495,6 +495,8 @@ export interface ConicNode extends MathMDNodeBase {
   /** Circunferencia: tangencia angular o desde un punto cartesiano externo. */
   tangentMode?: "angle" | "point";
   tangentPoint?: [number,number];
+  viewCenter?: [number,number];
+  viewSpan?: number;
   showEquation?: boolean;
   showInteractiveControls?: boolean;
   radiusAngle?: number;
@@ -1752,6 +1754,8 @@ export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   showIntersections: z.boolean().optional(),
   tangentMode: z.enum(["angle", "point"]).optional(),
   tangentPoint: z.tuple([z.number().finite(),z.number().finite()]).optional(),
+  viewCenter: z.tuple([z.number().finite(),z.number().finite()]).optional(),
+  viewSpan: z.number().finite().positive().max(1e6).optional(),
   showEquation: z.boolean().optional(),
   showInteractiveControls: z.boolean().optional(),
   radiusAngle: z.number().finite().min(-3600).max(3600).optional(),
