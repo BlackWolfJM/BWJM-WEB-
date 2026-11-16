@@ -1,120 +1,92 @@
 import type { ConicNode } from "@mathmd/ast";
 import { resolveCircle, type CircleGeometry } from "./circleGeometry.js";
+import { circleAuxiliaryLines, circleLineTex } from "./circleConstructions.js";
+import { exactAxisIntersections, exactRadiusAndMeasures, exactScalarTex } from "./circleExact.js";
 
-/** Pure readout data: formatting never changes the document's geometry. */
-export interface CircleReadoutMetric {
-  label: string;
-  value: string;
-  math?: boolean;
-}
-export const circleNumber = (number: number): string => {
-  if (!Number.isFinite(number)) return "Indeterminado";
-  return String(Number(number.toPrecision(8)) || 0);
+export interface CircleReadoutMetric { label:string;value:string;math?:boolean }
+export const circleNumber=(number:number):string=>{
+  if(!Number.isFinite(number))return "Indeterminado";
+  return String(Number(number.toPrecision(8))||0);
 };
-const formatPoint = (p: readonly [number, number]): string =>
-  "\\left(" + circleNumber(p[0]) + ",\\;" + circleNumber(p[1]) + "\\right)";
-const piMultiple = (coefficient: number): string => {
-  const coefficientText = circleNumber(coefficient);
-  return coefficientText === "0" ? "0" : coefficientText === "1" ? "\\pi"
-    : coefficientText === "-1" ? "-\\pi" : coefficientText + "\\pi";
+const formatPoint=(point:readonly[number,number]):string=>
+  "\\left("+exactScalarTex(point[0])+",\\;"+exactScalarTex(point[1])+"\\right)";
+const gcd=(a:number,b:number):number=>{
+  a=Math.abs(a);b=Math.abs(b);while(b)[a,b]=[b,a%b];return a||1;
 };
-const gcd = (a: number, b: number): number => {
-  a = Math.abs(a); b = Math.abs(b);
-  while (b) [a, b] = [b, a % b];
-  return a || 1;
-};
-
-/** Stored angles use degrees for the SVG editor; report them as radians with pi. */
-export function degreesToPiRadians(degrees: number): string {
-  if (!Number.isFinite(degrees)) return "\\text{Indeterminado}";
-  const ratio = degrees / 180;
-  for (let denominator = 1; denominator <= 360; denominator++) {
-    const numerator = Math.round(ratio * denominator);
-    if (Math.abs(ratio - numerator / denominator) > 1e-10) continue;
-    if (numerator === 0) return "0";
-    const divisor = gcd(numerator, denominator);
-    const p = numerator / divisor, q = denominator / divisor;
-    const numeratorTex = Math.abs(p) === 1 ? "\\pi" : Math.abs(p) + "\\pi";
-    const sign = p < 0 ? "-" : "";
-    return q === 1 ? sign + numeratorTex : sign + "\\frac{" + numeratorTex + "}{" + q + "}";
+/** SVG stores degrees; this readout always presents radians, simplifying rational pi. */
+export function degreesToPiRadians(degrees:number):string{
+  if(!Number.isFinite(degrees))return "\\text{Indeterminado}";
+  const ratio=degrees/180;
+  for(let denominator=1;denominator<=360;denominator++){
+    const numerator=Math.round(ratio*denominator);
+    if(Math.abs(ratio-numerator/denominator)>1e-10)continue;
+    if(numerator===0)return "0";
+    const divisor=gcd(numerator,denominator),p=numerator/divisor,q=denominator/divisor;
+    const top=(Math.abs(p)===1?"":Math.abs(p))+"\\pi";
+    return (p<0?"-":"")+(q===1?top:"\\frac{"+top+"}{"+q+"}");
   }
-  return "\\approx " + circleNumber(degrees * Math.PI / 180) + "\\;\\mathrm{rad}";
-}
-
-/** Preserve simple radicals for circles derived from equations and 3 points. */
-function radicalRadius(radius: number, mode: ConicNode["mode"]): {
-  radius: string; circumference: string; area: string;
-} | null {
-  if (mode !== "general" && mode !== "three-points") return null;
-  const squared = radius * radius;
-  const integer = Math.round(squared);
-  if (integer < 1 || integer > 1_000_000 ||
-      Math.abs(squared - integer) > 1e-10 * Math.max(1, integer)) return null;
-  let outside = 1, inside = integer;
-  for (let factor = 2; factor * factor <= inside; factor++) {
-    while (inside % (factor * factor) === 0) {
-      inside /= factor * factor;
-      outside *= factor;
-    }
-  }
-  if (inside === 1) return null;
-  const root = "\\sqrt{" + inside + "}";
-  return {
-    radius: (outside === 1 ? "" : outside) + root,
-    circumference: (2 * outside) + root + "\\pi",
-    area: piMultiple(integer),
-  };
+  return "\\approx "+circleNumber(degrees*Math.PI/180)+"\\;\\mathrm{rad}";
 }
 export function getCircleReadout(
-  node: Pick<ConicNode, "mode" | "showEquation" | "showRadius" | "showDiameter" | "showChord" |
-    "showSecant" | "showTangent" | "radiusAngle" | "diameterAngle" | "chordStartAngle" |
-    "chordEndAngle" | "secantStartAngle" | "secantEndAngle" | "tangentAngle">,
-  geometry: CircleGeometry,
-): CircleReadoutMetric[] {
-  const { center, radius } = geometry;
-  const radical = radicalRadius(radius, node.mode);
-  const metrics: CircleReadoutMetric[] = [
-    { label: "Definición", value: node.mode === "three-points" ? "Tres puntos"
-      : node.mode === "general" ? "Ecuación general"
-      : node.mode === "canonical" ? "Ecuación canónica" : "Centro y radio" },
-    { label: "Centro", value: formatPoint(center), math: true },
-    { label: "Radio", value: radical?.radius ?? circleNumber(radius), math: true },
-    { label: "Diámetro", value: radical ? "2\\left(" + radical.radius + "\\right)"
-      : circleNumber(2 * radius), math: true },
-    { label: "Longitud de circunferencia",
-      value: radical?.circumference ?? piMultiple(2 * radius), math: true },
-    { label: "Área del círculo", value: radical?.area ?? piMultiple(radius * radius), math: true },
+  node:Pick<ConicNode,
+    "mode"|"showEquation"|"showRadius"|"showDiameter"|"showChord"|
+    "showSecant"|"showTangent"|"radiusAngle"|"diameterAngle"|"chordStartAngle"|
+    "chordEndAngle"|"secantStartAngle"|"secantEndAngle"|"tangentAngle"|
+    "tangentMode"|"tangentPoint">,
+  geometry:CircleGeometry,
+):CircleReadoutMetric[]{
+  const measures=exactRadiusAndMeasures(geometry,
+    node.mode==="general"||node.mode==="three-points");
+  const intercepts=exactAxisIntersections(geometry);
+  const values:CircleReadoutMetric[]=[
+    {label:"Definición",value:node.mode==="three-points"?"Tres puntos":
+      node.mode==="general"?"Ecuación general":
+      node.mode==="canonical"?"Ecuación canónica":"Centro y radio"},
+    {label:"Centro",value:formatPoint(geometry.center),math:true},
+    {label:"Radio",value:measures.radius,math:true},
+    {label:"Diámetro",value:measures.diameter,math:true},
+    {label:"Longitud de circunferencia",value:measures.length,math:true},
+    {label:"Área del círculo",value:measures.area,math:true},
   ];
-  if (node.showEquation !== false) {
-    metrics.push(
-      { label: "Ecuación canónica", value: geometry.canonicalTex, math: true },
-      { label: "Ecuación general", value: geometry.generalTex, math: true },
-    );
-  }
-  metrics.push(
-    { label: "Cortes con eje X", value: geometry.xIntersections.length
-      ? geometry.xIntersections.map(formatPoint).join(",\\;") : "Ninguno",
-      math: geometry.xIntersections.length > 0 },
-    { label: "Cortes con eje Y", value: geometry.yIntersections.length
-      ? geometry.yIntersections.map(formatPoint).join(",\\;") : "Ninguno",
-      math: geometry.yIntersections.length > 0 },
+  if(node.showEquation!==false)values.push(
+    {label:"Ecuación canónica",value:geometry.canonicalTex,math:true},
+    {label:"Ecuación general",value:geometry.generalTex,math:true},
   );
-  const angle = (label: string, degrees: number) => metrics.push({
-    label, value: degreesToPiRadians(degrees), math: true,
+  values.push(
+    {label:"Cortes con eje X",value:intercepts.x,math:intercepts.x!=="Ninguno"},
+    {label:"Cortes con eje Y",value:intercepts.y,math:intercepts.y!=="Ninguno"},
+  );
+  const angle=(label:string,degrees:number)=>values.push({
+    label,value:degreesToPiRadians(degrees),math:true,
   });
-  if (node.showRadius) angle("Dirección del radio", node.radiusAngle ?? 30);
-  if (node.showDiameter) angle("Dirección del diámetro", node.diameterAngle ?? 0);
-  if (node.showChord) {
-    angle("Cuerda: ángulo inicial", node.chordStartAngle ?? 35);
-    angle("Cuerda: ángulo final", node.chordEndAngle ?? 140);
+  if(node.showRadius)angle("Dirección del radio",node.radiusAngle??30);
+  if(node.showDiameter)angle("Dirección del diámetro",node.diameterAngle??0);
+  if(node.showChord){
+    angle("Cuerda: ángulo inicial",node.chordStartAngle??35);
+    angle("Cuerda: ángulo final",node.chordEndAngle??140);
   }
-  if (node.showSecant) {
-    angle("Secante: ángulo inicial", node.secantStartAngle ?? 220);
-    angle("Secante: ángulo final", node.secantEndAngle ?? 300);
+  if(node.showSecant){
+    angle("Secante: ángulo inicial",node.secantStartAngle??220);
+    angle("Secante: ángulo final",node.secantEndAngle??300);
   }
-  if (node.showTangent) angle("Punto de tangencia: ángulo", node.tangentAngle ?? 60);
-  return metrics;
+  if(node.showTangent&&node.tangentMode!=="point")
+    angle("Punto de tangencia: ángulo",node.tangentAngle??60);
+
+  const lines=circleAuxiliaryLines(node,geometry);
+  let tangents=0;
+  for(const item of lines){
+    const name=item.kind==="tangent"?"Tangente "+(++tangents):
+      item.kind==="chord"?"Cuerda":"Secante";
+    values.push({label:name+" · ecuación",value:circleLineTex(item.line),math:true});
+    if(item.kind==="tangent")
+      values.push({label:name+" · contacto",value:formatPoint(item.touches[0]),math:true});
+  }
+  if(node.showTangent&&node.tangentMode==="point"&&node.tangentPoint){
+    values.push({label:"Punto P de tangencia",value:formatPoint(node.tangentPoint),math:true});
+    if(!tangents)values.push({label:"Tangentes reales",value:"Ninguna: P está dentro del círculo"});
+  }
+  return values;
 }
-export function circleMetricsForNode(node: ConicNode): CircleReadoutMetric[] {
-  return getCircleReadout(node, resolveCircle(node));
+export function circleMetricsForNode(node:ConicNode):CircleReadoutMetric[]{
+  return getCircleReadout(node,resolveCircle(node));
 }
