@@ -4048,3 +4048,39 @@ code.bwjm-property-value {
 @media (prefers-reduced-motion:reduce) {
   .bwjm-document-sidebar, .bwjm-document-sidebar-tab { transition:none; }
 }
+
+
+/* Ellipse scientific editor reuses the circle's compact academic panel. */
+.bwjm-ellipse-composer { display: grid; gap: .8rem; min-width: 0; }
+.bwjm-ellipse-composer .bwjm-modal-grid { align-items: start; }
+.bwjm-ellipse-options label {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  min-height: 26px;
+  font-size: .8rem;
+}
+.bwjm-ellipse-options input[type="checkbox"] { flex: none; }
+.bwjm-ellipse-preview-report { min-width: 0; }
+.bwjm-ellipse-report .bwjm-circle-details { gap: .85rem 1.25rem; }
+.bwjm-ellipse-transform {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .45rem 1rem;
+  color: var(--text-secondary);
+  font-size: .76rem;
+  margin: -.25rem 0 .85rem;
+  overflow-x: auto;
+}
+.bwjm-ellipse-transform > div {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  color: var(--text-main);
+}
+.bwjm-ellipse-report .bwjm-circle-detail-list dd { max-width: 72%; }
+@media (max-width: 680px) {
+  .bwjm-ellipse-composer .bwjm-modal-grid { grid-template-columns: minmax(0, 1fr); }
+}
