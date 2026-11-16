@@ -4084,3 +4084,37 @@ code.bwjm-property-value {
 @media (max-width: 680px) {
   .bwjm-ellipse-composer .bwjm-modal-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+
+/* Geometry handles can be dragged without accidentally scrolling the page. */
+.bwjm-circle-drag-handle {
+  cursor: grab;
+  touch-action: none;
+  outline: none;
+}
+.bwjm-circle-drag-handle:hover,
+.bwjm-circle-drag-handle:focus-visible {
+  stroke: #e2a72a;
+  stroke-width: 2px;
+}
+.bwjm-circle-dragging,
+.bwjm-circle-dragging .bwjm-circle-drag-handle {
+  cursor: grabbing;
+  touch-action: none;
+  user-select: none;
+}
+.bwjm-circle-equations .bwjm-circle-detail-list dd {
+  max-width: 75%;
+  min-width: 0;
+  overflow-x: auto;
+}
+.bwjm-circle-tangent-input {
+  display: grid;
+  gap: .5rem;
+  min-width: 0;
+}
+.bwjm-circle-tangent-hint {
+  margin: .3rem 0;
+  font-size: .75rem;
+  color: var(--text-secondary);
+}
