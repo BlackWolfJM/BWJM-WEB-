@@ -92,10 +92,17 @@ export function createParabolaSVG(node:ConicNode,g:ParabolaGeometry=resolveParab
     const direction=Math.sign(g.p),tip:ParabolaPoint=[
       g.vertex[0]+direction*span*.65*axis[0],
       g.vertex[1]+direction*span*.65*axis[1]];
-    const arrow=el("text",{x:X(tip[0]),y:Y(tip[1]),"text-anchor":"middle",
-      "font-size":13,fill:"#c99635","data-role":"opening-direction"});
-    arrow.textContent="↗";
-    svg.appendChild(arrow);
+    const backward:ParabolaPoint=[
+      tip[0]-direction*span*.13*axis[0],
+      tip[1]-direction*span*.13*axis[1]];
+    const width=span*.06;
+    const left:ParabolaPoint=[backward[0]+width*transverse[0],
+      backward[1]+width*transverse[1]];
+    const right:ParabolaPoint=[backward[0]-width*transverse[0],
+      backward[1]-width*transverse[1]];
+    svg.appendChild(el("polygon",{points:[tip,left,right]
+      .map(([x,y])=>X(x)+","+Y(y)).join(" "),fill:"#c99635",
+      "data-role":"opening-direction"}));
   }
   if(node.showDirectrix!==false){
     const on=parabolaPoint(g,-g.p,0);
