@@ -42,7 +42,7 @@ describe("Advanced hyperbola geometry",()=>{
     expect(g.rectangle).toHaveLength(4);
     for(const [i,asymptote] of g.asymptotes.entries()){
       close(lineAt(asymptote,0,0),0);
-      const corner=i===0?g.rectangle[0]:g.rectangle[3];
+      const corner=i===0?g.rectangle[3]:g.rectangle[0];
       close(lineAt(asymptote,...corner),0);
     }
     for(const directrix of g.directrices){
