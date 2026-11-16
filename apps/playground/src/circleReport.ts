@@ -108,5 +108,11 @@ export function buildCircleReport(
     item.label.startsWith("Dirección") || item.label.startsWith("Cuerda:") ||
     item.label.startsWith("Secante:") || item.label.startsWith("Punto de tangencia:"));
   if (angles.length) panel.appendChild(section("Ángulos en radianes", angles, "bwjm-circle-angles"));
+  const lines = items.filter(item =>
+    item.label.startsWith("Tangente ") || item.label.startsWith("Cuerda ·") ||
+    item.label.startsWith("Secante ·") || item.label.startsWith("Punto P de tangencia") ||
+    item.label === "Tangentes reales");
+  if (lines.length) panel.appendChild(section("Rectas y puntos notables",
+    lines, "bwjm-circle-equations"));
   return panel;
 }
