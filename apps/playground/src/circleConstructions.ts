@@ -78,8 +78,10 @@ export function circleAuxiliaryLines(
 }
 export function pointOnCircle(
   point:CirclePoint,geo:CircleGeometry,tolerance=1e-8,
-):boolean=>Math.abs(Math.hypot(point[0]-geo.center[0],point[1]-geo.center[1])-geo.radius)
-  <=tolerance*Math.max(1,geo.radius);
+):boolean {
+  return Math.abs(Math.hypot(point[0]-geo.center[0],point[1]-geo.center[1])-geo.radius)
+    <=tolerance*Math.max(1,geo.radius);
+}
 
 /** Normalize rational lines to primitive integers; otherwise signal an approximation. */
 export function circleLineTex(line:CircleLine):string{
