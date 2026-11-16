@@ -36,7 +36,7 @@ import { DocumentTabs } from "./DocumentTabs.js";
 import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
 import { createCrossProductDeterminant, createCrossProductEditor, createCrossProductReport } from "./CrossProductEditor.js";
 import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
-import { resetSurfaceColor, updateCircleDimensions, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
+import { resetSurfaceColor, updateCircleDimensions, updateEllipseDimensions, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
@@ -46,6 +46,9 @@ import { createCircleSVG } from "./circleFigure.js";
 import { resolveCircle } from "./circleGeometry.js";
 import { buildCircleReport } from "./circleReport.js";
 import { buildEllipseReport } from "./ellipseReport.js";
+import { createEllipseSVG } from "./ellipseFigure.js";
+import { resolveEllipse } from "./ellipseGeometry.js";
+import { mountEllipseControls } from "./ellipseControls.js";
 import { mountCircleControls } from "./circleControls.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
 import { ImageModal, type ImageInsertion } from "./ImageModal.js";
@@ -1385,6 +1388,7 @@ initialConditions:
             ["showLatusRectum", "Lados rectos"],
             ["showTangent", "Tangente"],
             ["showEquation", "Ecuación"],
+            ["showInteractiveControls", "Trasladar y cambiar semiejes"],
           ] : node.type === "line3d" ? [
             ["showPoint", "Mostrar punto P"],
             ["showDirection", "Mostrar vector director v"],
@@ -2056,7 +2060,23 @@ initialConditions:
                   [center[0],center[1]],radius));
               });
           } else if (node.conicType === "ellipse") {
-            cardBody.appendChild(buildEllipseReport(node));
+            const geometry = resolveEllipse(node);
+            let report = buildEllipseReport(node,geometry);
+            cardBody.appendChild(report);
+            mountEllipseControls(cardBody,node,geometry,
+              next => {
+                const fresh = createEllipseSVG(node,next);
+                figure.replaceWith(fresh);
+                figure = fresh;
+                const updatedReport = buildEllipseReport(node,next);
+                report.replaceWith(updatedReport);
+                report = updatedReport;
+              },
+              (center,a,b) => {
+                openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
+                setMarkdown(previous => updateEllipseDimensions(previous,node.range,
+                  [center[0],center[1]],a,b));
+              });
           }
           const button = document.createElement("button");
           button.type = "button";
