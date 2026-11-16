@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { ConicNode } from "@mathmd/ast";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseMathMD } from "@mathmd/parser";
@@ -20,7 +21,7 @@ describe("Ellipses for scientific notes",()=>{
     expect(g.directrixOffset).toBeCloseTo(25/3);
     expect(g.canonicalTex).toContain("25");
     expect(g.generalTex).toContain("x^2");
-    expect(ellipseMetrics({conicType:"ellipse",type:"conic",range:{} as any,id:"e"} as any,g)
+    expect(ellipseMetrics({type:"conic",conicType:"ellipse"} as ConicNode,g)
       .find(m=>m.label==="Área interior")?.value).toBe("20\\pi");
   });
   it("supports vertical axes and rotated general equations",()=>{
