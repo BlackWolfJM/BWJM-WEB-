@@ -247,7 +247,7 @@ function buildMathMDNode(
 
   switch (type) {
     case "conic": {
-      const parsed = conicSchema.safeParse({ ...base, ...data });
+      const parsed = conicSchema.safeParse({ ...data, ...base });
       if (!parsed.success) {
         for (const issue of parsed.error.issues) diagnostics.push({
           severity: "error", code: "MATHMD_SCHEMA_INVALID", message: issue.message,
