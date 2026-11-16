@@ -3,6 +3,7 @@ import type { ConicNode } from "@mathmd/ast";
 import { circleFromCenterRadius, circleFromCoefficients, circleFromThreePoints,
   parseCircleEquation, serializeCircleBlock, type CircleGeometry } from "./circleGeometry.js";
 import { createCircleSVG } from "./circleFigure.js";
+import { buildCircleReport } from "./circleReport.js";
 
 type CircleMode = "center-radius" | "canonical" | "general" | "three-points";
 interface Props { onInsert: (source:string)=>void; onClose:()=>void }
@@ -26,6 +27,7 @@ export function CircleComposer({onInsert,onClose}:Props) {
   });
   const [color,setColor]=useState("#0284c7");
   const previewRef=useRef<HTMLDivElement|null>(null);
+  const reportRef=useRef<HTMLDivElement|null>(null);
   let geometry:CircleGeometry|undefined;
   let points:Array<[number,number]>|undefined;
   let error="";
@@ -58,14 +60,16 @@ export function CircleComposer({onInsert,onClose}:Props) {
       error="Los extremos de cada cuerda o secante deben ser distintos.";
   }
   useEffect(()=>{
-    if(!previewRef.current)return;
+    if(!previewRef.current||!reportRef.current)return;
     previewRef.current.replaceChildren();
+    reportRef.current.replaceChildren();
     if(!geometry||error)return;
     const node={
       conicType:"circle",mode,
       ...savedFlags,...angles,color,
     } as ConicNode;
     previewRef.current.appendChild(createCircleSVG(node,geometry));
+    reportRef.current.appendChild(buildCircleReport(node,geometry));
   });
   const numeric=(label:string,value:string,setter:(value:string)=>void)=>
     <label className="bwjm-modal-field">
@@ -157,12 +161,8 @@ export function CircleComposer({onInsert,onClose}:Props) {
       <input type="color" value={color} onChange={e=>setColor(e.target.value)}/>
     </label>
     <div ref={previewRef} aria-label="Vista previa de la circunferencia" />
-    {geometry&&<div className="bwjm-calculus-report">
-      <strong>Ecuación: {geometry.canonicalTex}</strong>
-      <p>Centro ({geometry.center.map(x=>Number(x.toPrecision(6))).join(", ")}), radio {Number(geometry.radius.toPrecision(6))},
-        diámetro {Number((2*geometry.radius).toPrecision(6))}</p>
-      <p>Ecuación general: {geometry.generalTex}</p>
-    </div>}
+    <div ref={reportRef} className="bwjm-circle-preview-report"
+      aria-label="Vista previa de las propiedades matemáticas" />
     {error&&<p className="bwjm-calculus-error" role="alert">{error}</p>}
     <details className="bwjm-chart-source"><summary>Ver código .bwjm</summary>
       <pre className="bwjm-code-preview"><code>{geometry&&!error?serializeCircleBlock(mode,geometry,{...flags,...angles,color},points):"Revisa los parámetros."}</code></pre>
