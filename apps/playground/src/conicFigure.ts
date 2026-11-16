@@ -9,7 +9,7 @@ export function createConicSVG(node: ConicNode): SVGSVGElement {
     return item;
   };
   const svg = el("svg", { xmlns: NS, viewBox: "0 0 720 460", role: "img",
-    "aria-label": "Representación de " + (node.conicType ?? "circunferencia") });
+    "aria-label": "Representación de " + (node.conicType ?? "circunferencia") }) as SVGSVGElement;
   svg.style.width = "100%";
   svg.style.maxHeight = "460px";
   const type = node.conicType ?? "circle";
