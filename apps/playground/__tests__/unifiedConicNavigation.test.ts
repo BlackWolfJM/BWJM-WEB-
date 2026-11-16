@@ -12,8 +12,8 @@ describe("Unified graphics and conics entry", () => {
     expect(graphActions).toHaveLength(1);
     expect(graphActions[0].id).toBe("graph");
     expect(graphActions[0].label).toBe("Gráficos y superficies");
-    expect(RIBBON_GROUPS.Insertar.flatMap(group => group.actions)
-      .some(action => action.id === "conic")).toBe(false);
+    const ids: string[] = RIBBON_GROUPS.Insertar.flatMap(group => group.actions).map(action => action.id);
+    expect(ids).not.toContain("conic");
   });
 
   it("lists the four conics under one gallery category, without a separate circle tab", () => {
