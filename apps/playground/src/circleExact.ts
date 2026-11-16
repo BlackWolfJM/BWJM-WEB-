@@ -29,7 +29,11 @@ const rationalTex=(value:Rational):string=>{
 };
 export function exactScalarTex(value:number):string{
   const rational=rationalNumber(value);
-  return rational?rationalTex(rational):"\\approx "+fmt(value);
+  if(rational)return rationalTex(rational);
+  const written=String(value);
+  if(!written.includes("e") && /^-?\\d+(?:\\.\\d{1,6})?$/.test(written))
+    return written;
+  return "\\approx "+fmt(value);
 }
 /** Return the exact positive square root of a rational radicand when recognizable. */
 export function exactRootTex(square:number):string|null{
