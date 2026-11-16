@@ -93,7 +93,7 @@ export function createConicSVG(node: ConicNode): SVGSVGElement {
       dot(x,y,s<0?"F₁":"F₂");
     }
   }
-  if(node.showVertices!==false && type!=="circle"){
+  if(node.showVertices!==false){
     if(type==="parabola") dot(h,k,"V","#0d9488");
     else for(const s of [-1,1]){
       const [x,y]=axis==="y"&&type==="hyperbola"?point(0,s*a):point(s*a,0);
