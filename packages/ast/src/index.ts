@@ -1571,16 +1571,6 @@ export function validatePlane3D(data: any, ctx: z.RefinementCtx): void {
       }
     }
   } else if (mode === "general") {
-    if (type === "circle" && [data.A,data.B,data.C,data.D,data.E,data.F].every(Number.isFinite)) {
-      const {A,B,C,D,E,F}=data;
-      const radiusSquared=(D*D+E*E)/(4*A*A)-F/A;
-      if (Math.abs(A)<1e-12 || Math.abs(A-C)>1e-8*Math.max(1,Math.abs(A)) ||
-          Math.abs(B)>1e-8*Math.max(1,Math.abs(A)) ||
-          !Number.isFinite(radiusSquared) || radiusSquared<=1e-12) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom,
-          message: "La ecuación no representa una circunferencia real de radio positivo", path: ["mode"] });
-      }
-    }
     if (data.A === undefined || data.B === undefined || data.C === undefined || data.D === undefined) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo general requiere A, B, C, D", path: ["mode"] });
     }
@@ -1823,6 +1813,16 @@ export function validateConic(data: any, ctx: z.RefinementCtx): void {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Eje menor no puede ser mayor que eje mayor", path: ["semiMinorAxis"] });
     }
   } else if (mode === "general") {
+    if (type === "circle" && [data.A,data.B,data.C,data.D,data.E,data.F].every(Number.isFinite)) {
+      const {A,B,C,D,E,F}=data;
+      const radiusSquared=(D*D+E*E)/(4*A*A)-F/A;
+      if (Math.abs(A)<1e-12 || Math.abs(A-C)>1e-8*Math.max(1,Math.abs(A)) ||
+          Math.abs(B)>1e-8*Math.max(1,Math.abs(A)) ||
+          !Number.isFinite(radiusSquared) || radiusSquared<=1e-12) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom,
+          message: "La ecuación no representa una circunferencia real de radio positivo", path: ["mode"] });
+      }
+    }
     if (data.A === undefined || data.B === undefined || data.C === undefined || data.D === undefined || data.E === undefined || data.F === undefined) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo general requiere A, B, C, D, E, F", path: ["mode"] });
     }
