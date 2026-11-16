@@ -1,4 +1,4 @@
-import type { EllipseCoefficients, EllipsePoint } from "./ellipseEquation.js";
+import type { EllipseCoefficients } from "./ellipseEquation.js";
 import { exactRootTex, exactScalarTex, rationalNumber } from "./circleExact.js";
 
 const point=(x:string,y:string)=>"\\left("+x+",\\;"+y+"\\right)";
@@ -30,19 +30,5 @@ export function ellipseAxisCrossingTex(coefficients:EllipseCoefficients):{
   return {
     x:format(solve(coefficients.A,coefficients.D,coefficients.F),true),
     y:format(solve(coefficients.C,coefficients.E,coefficients.F),false),
-  };
-}
-export function ellipseAxisCrossingPoints(coefficients:EllipseCoefficients):{
-  x:EllipsePoint[];y:EllipsePoint[];
-}{
-  const roots=(a:number,b:number,c:number):number[]=>{
-    const disc=b*b-4*a*c,eps=1e-11*Math.max(1,Math.abs(b*b),Math.abs(4*a*c));
-    if(disc< -eps)return [];
-    const d=Math.sqrt(Math.max(0,disc));
-    return d<=Math.sqrt(eps)?[-b/(2*a)]:[(-b-d)/(2*a),(-b+d)/(2*a)];
-  };
-  return {
-    x:roots(coefficients.A,coefficients.D,coefficients.F).map(x=>[x,0]),
-    y:roots(coefficients.C,coefficients.E,coefficients.F).map(y=>[0,y]),
   };
 }
