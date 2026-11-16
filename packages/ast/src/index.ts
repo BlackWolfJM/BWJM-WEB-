@@ -508,6 +508,7 @@ export interface ConicNode extends MathMDNodeBase {
   secantStartAngle?: number;
   secantEndAngle?: number;
   tangentAngle?: number;
+  tangentParameter?: number;
   color?: string;
   colorFocus?: string;
   colorDirectrix?: string;
@@ -1769,6 +1770,7 @@ export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   secantStartAngle: z.number().finite().min(-3600).max(3600).optional(),
   secantEndAngle: z.number().finite().min(-3600).max(3600).optional(),
   tangentAngle: z.number().finite().min(-3600).max(3600).optional(),
+  tangentParameter: z.number().finite().min(-1000).max(1000).optional(),
   color: z.string().optional(),
   colorFocus: z.string().optional(),
   colorDirectrix: z.string().optional(),
