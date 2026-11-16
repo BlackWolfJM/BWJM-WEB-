@@ -36,7 +36,7 @@ import { DocumentTabs } from "./DocumentTabs.js";
 import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
 import { createCrossProductDeterminant, createCrossProductEditor, createCrossProductReport } from "./CrossProductEditor.js";
 import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
-import { resetSurfaceColor, updateCircleDimensions, updateEllipseDimensions, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
+import { resetSurfaceColor, updateCircleInteraction, updateEllipseDimensions, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
@@ -50,6 +50,7 @@ import { createEllipseSVG } from "./ellipseFigure.js";
 import { resolveEllipse } from "./ellipseGeometry.js";
 import { mountEllipseControls } from "./ellipseControls.js";
 import { mountCircleControls } from "./circleControls.js";
+import { mountCircleDrag, type CircleInteraction } from "./circleDrag.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
 import { ImageModal, type ImageInsertion } from "./ImageModal.js";
 import { insertEmbeddedImage } from "./documentImages.js";
@@ -1377,7 +1378,7 @@ initialConditions:
             ["showTangent", "Tangente"],
             ["showIntersections", "Intersecciones con los ejes"],
             ["showEquation", "Ecuación"],
-            ["showInteractiveControls", "Controles para mover y cambiar radio"],
+            ["showInteractiveControls", "Arrastrar centro y puntos de la gráfica"],
           ] : node.type === "conic" && node.conicType === "ellipse" ? [
             ["showCenter", "Centro"],
             ["showFocus", "Focos"],
@@ -2045,20 +2046,32 @@ initialConditions:
             const originalGeometry = resolveCircle(node);
             let report = buildCircleReport(node, originalGeometry);
             cardBody.appendChild(report);
+            const previewCircle = (next: typeof originalGeometry, change: CircleInteraction = {}) => {
+              const visualNode = {
+                ...node,
+                ...change.angles,
+                tangentPoint: change.tangentPoint ?? node.tangentPoint,
+                viewCenter: node.viewCenter ?? originalGeometry.center,
+                viewSpan: node.viewSpan ?? Math.max(3, originalGeometry.radius * 1.55),
+              };
+              const fresh = createCircleSVG(visualNode, next);
+              figure.replaceWith(fresh);
+              figure = fresh;
+              const updatedReport = buildCircleReport(visualNode, next);
+              report.replaceWith(updatedReport);
+              report = updatedReport;
+            };
+            const persistCircle = (change: CircleInteraction) => {
+              openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
+              setMarkdown(previous => updateCircleInteraction(previous, node.range,
+                node, originalGeometry, change));
+            };
+            mountCircleDrag(cardBody, node, originalGeometry, previewCircle, persistCircle);
             mountCircleControls(cardBody, node, originalGeometry,
-              next => {
-                const fresh = createCircleSVG(node, next);
-                figure.replaceWith(fresh);
-                figure = fresh;
-                const updatedReport = buildCircleReport(node, next);
-                report.replaceWith(updatedReport);
-                report = updatedReport;
-              },
-              (center,radius) => {
-                openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
-                setMarkdown(previous => updateCircleDimensions(previous, node.range,
-                  [center[0],center[1]],radius));
-              });
+              next => previewCircle(next, { center: next.center, radius: next.radius }),
+              (center,radius) => persistCircle({
+                center: [center[0], center[1]], radius,
+              }));
           } else if (node.conicType === "ellipse") {
             const geometry = resolveEllipse(node);
             let report = buildEllipseReport(node,geometry);
