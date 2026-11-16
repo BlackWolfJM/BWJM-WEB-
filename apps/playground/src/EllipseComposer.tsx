@@ -92,10 +92,14 @@ export function EllipseComposer({onInsert,onClose}:Props){
           const baseline=coefficientsFromEllipse(original.center,original.a,original.b,original.rotation);
           const ratio=previous.A/baseline.A;
           const newer=coefficientsFromEllipse(next.center,next.a,next.b,next.rotation);
-          const expression=["A","B","C","D","E","F"].map(key=>
-            String(newer[key as keyof EllipseCoefficients]*ratio));
+          const format=(number:number)=>Math.abs(number)<1e-9?"0":
+            Number(number.toFixed(9)).toLocaleString("en-US",{useGrouping:false,
+              maximumFractionDigits:9});
+          const expression=(["A","B","C","D","E","F"] as const).map(key=>
+            format(newer[key]*ratio));
           const [A,B,C,D,E,F]=expression;
-          setGeneralEquation(A+"*x^2+"+B+"*x*y+"+C+"*y^2+"+D+"*x+"+E+"*y+"+F+"=0");
+          setGeneralEquation("("+A+")*x^2+("+B+")*x*y+("+C+")*y^2+("+
+            D+")*x+("+E+")*y+("+F+")=0");
         }
       }
     });
