@@ -423,7 +423,7 @@ export type ConicType = "circle" | "ellipse" | "parabola" | "hyperbola";
 /**
  * Modo de definición de una cónica.
  */
-export type ConicMode = "focus-directrix" | "foci" | "center-radius" | "center-axes" | "general" | "three-points" | "focus-point";
+export type ConicMode = "canonical" | "focus-directrix" | "foci" | "center-radius" | "center-axes" | "general" | "three-points" | "focus-point";
 
 /**
  * Nodo para visualización de cónicas 2D (circunferencia, elipse, parábola, hipérbola).
@@ -433,6 +433,8 @@ export interface ConicNode extends MathMDNodeBase {
   type: "conic";
   conicType?: ConicType;
   mode?: ConicMode;
+  axis?: "x" | "y";
+  focalParameter?: number;
   
   // focus-directrix (foco-directriz)
   focus?: [number, number];
@@ -1667,7 +1669,7 @@ export const linesDistanceSchema = mathmdNodeBaseSchema.extend({
 export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   type: z.literal("conic"),
   conicType: z.enum(["circle", "ellipse", "parabola", "hyperbola"]).optional(),
-  mode: z.enum(["focus-directrix", "foci", "center-radius", "center-axes", "general", "three-points", "focus-point"]).optional(),
+  mode: z.enum(["canonical", "focus-directrix", "foci", "center-radius", "center-axes", "general", "three-points", "focus-point"]).optional(),
   
   // focus-directrix
   focus: z.tuple([z.number().finite(), z.number().finite()]).optional(),
@@ -1680,6 +1682,9 @@ export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   sumDistances: z.number().finite().positive().optional(),
   diffDistances: z.number().finite().positive().optional(),
   
+  axis: z.enum(["x", "y"]).optional(),
+  focalParameter: z.number().finite().refine(p => p !== 0, "El parámetro focal no puede ser cero").optional(),
+
   // center-radius
   center: z.tuple([z.number().finite(), z.number().finite()]).optional(),
   radius: z.number().finite().positive().optional(),
@@ -1735,7 +1740,14 @@ export function validateConic(data: any, ctx: z.RefinementCtx): void {
   const mode = data.mode ?? "center-radius";
   const type = data.conicType ?? "circle";
   
-  if (mode === "focus-directrix") {
+  if (mode === "canonical") {
+    if (!data.center || !data.conicType || (data.conicType === "circle" && !data.radius) ||
+        (data.conicType === "ellipse" && (!data.semiMajorAxis || !data.semiMinorAxis)) ||
+        (data.conicType === "hyperbola" && (!data.semiMajorAxis || !data.semiMinorAxis)) ||
+        (data.conicType === "parabola" && !data.focalParameter)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Faltan parámetros canónicos de la cónica", path: ["mode"] });
+    }
+  } else if (mode === "focus-directrix") {
     if (!data.focus || !data.directrix) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo focus-directrix requiere focus y directrix", path: ["mode"] });
     }
