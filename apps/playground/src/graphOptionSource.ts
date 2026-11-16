@@ -9,6 +9,11 @@ import type { EllipseInteraction } from "./ellipseDrag.js";
 import { coefficientsFromParabola, parabolaFromVertex,
   resolveParabola, type ParabolaGeometry } from "./parabolaGeometry.js";
 import type { ParabolaInteraction } from "./parabolaDrag.js";
+import {
+  hyperbolaCoefficients, hyperbolaFromCenter, resolveHyperbola,
+  type HyperbolaGeometry,
+} from "./hyperbolaGeometry.js";
+import type { HyperbolaInteraction } from "./hyperbolaDrag.js";
 
 type GraphOptionValue = boolean | number | string | readonly number[] | Record<string,number>;
 
@@ -115,7 +120,7 @@ export function updateGraphOption(
       "showCenter","showRadius","showDiameter","showChord","showSecant",
       "showTangent","showIntersections","showEquation","showInteractiveControls",
       "showFocus","showVertices","showAxes","showDirectrices","showCoVertices","showLatusRectum",
-      "showNormal","showParametric","showDirectrix",
+      "showNormal","showParametric","showDirectrix","showAsymptotes","showRectangle",
     ]);
     if (!allowed.has(key) || typeof value !== "boolean") return source;
     const updated=updateGraphField(source,range,blockType,key,value);
@@ -409,4 +414,69 @@ export function updateParabolaInteraction(
          Math.sin(verified.rotation)-Math.sin(rotation))>1e-5)return source;
   }catch{return source;}
   return updated;
+}
+
+
+/** Persist a hyperbola manipulation within the original conic block and definition mode. */
+export function updateHyperbolaInteraction(
+  source:string,range:SourceRange,node:ConicNode,initial:HyperbolaGeometry,
+  change:HyperbolaInteraction,
+):string{
+  const center=change.center??initial.center,a=change.a??initial.a,
+    b=change.b??initial.b,rotation=change.rotation??initial.rotation;
+  let geometry:HyperbolaGeometry;
+  try{geometry=hyperbolaFromCenter(center,a,b,"x",rotation);}
+  catch{return source;}
+  const patches:Array<[string,GraphOptionValue]>=[];
+  if(change.center||change.a!==undefined||change.b!==undefined||
+     change.rotation!==undefined){
+    if(node.mode==="foci"){
+      if(change.rotation!==undefined)return source;
+      patches.push(["focus1",geometry.focus1],["focus2",geometry.focus2],
+        ["diffDistances",2*geometry.a]);
+    }else if(node.mode==="general"){
+      const baseline=hyperbolaCoefficients(initial.center,initial.a,
+        initial.b,initial.rotation);
+      const key=(["A","B","C"] as const).reduce((best,key)=>
+        Math.abs(baseline[key])>Math.abs(baseline[best])?key:best,"A");
+      if(Math.abs(baseline[key])<=1e-12)return source;
+      const old=node[key];
+      if(!Number.isFinite(old))return source;
+      const factor=old!/baseline[key];
+      const updated=hyperbolaCoefficients(center,a,b,rotation);
+      for(const name of ["A","B","C","D","E","F"] as const)
+        patches.push([name,updated[name]*factor]);
+    }else if(node.mode==="canonical"||node.mode==="center-axes"){
+      patches.push(["center",center],["semiMajorAxis",a],["semiMinorAxis",b],
+        ["rotation",rotation-(node.axis==="y"?Math.PI/2:0)]);
+    }else return source;
+  }
+  if(change.tangentParameter!==undefined){
+    if(!Number.isFinite(change.tangentParameter)||
+      Math.abs(change.tangentParameter)>1000)return source;
+    patches.push(["tangentParameter",change.tangentParameter]);
+  }
+  if(patches.length===0)return source;
+  if(!node.viewCenter)patches.push(["viewCenter",initial.center]);
+  if(!node.viewSpan)patches.push(["viewSpan",Math.max(4,initial.c*1.7,initial.b*2.1)]);
+  let result=source,current=range;
+  for(const [name,value] of patches){
+    const next=updateGraphField(result,current,"conic",name,value);
+    current={...current,end:{...current.end,
+      offset:current.end.offset+next.length-result.length}};
+    result=next;
+  }
+  const parsed=parseMathMD(result.slice(range.start.offset,current.end.offset));
+  const nodeAfter=parsed.children[0];
+  if(parsed.diagnostics.some(item=>item.severity==="error")||
+    nodeAfter?.type!=="conic"||nodeAfter.conicType!=="hyperbola")return source;
+  try{
+    const found=resolveHyperbola(nodeAfter);
+    if(Math.hypot(found.center[0]-center[0],found.center[1]-center[1])>
+      1e-5*Math.max(1,a,b)||Math.abs(found.a-a)>1e-5*Math.max(1,a)||
+      Math.abs(found.b-b)>1e-5*Math.max(1,b))return source;
+    const angle=2*(found.rotation-rotation);
+    if(Math.hypot(Math.sin(angle),1-Math.cos(angle))>1e-5)return source;
+  }catch{return source;}
+  return result;
 }
