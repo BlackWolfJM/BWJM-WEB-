@@ -4,6 +4,7 @@ import { circleFromCenterRadius, circleFromCoefficients, circleFromThreePoints,
   parseCircleEquation, serializeCircleBlock, type CircleGeometry } from "./circleGeometry.js";
 import { createCircleSVG } from "./circleFigure.js";
 import { buildCircleReport } from "./circleReport.js";
+import { tangentsFromPoint } from "./circleConstructions.js";
 
 type CircleMode = "center-radius" | "canonical" | "general" | "three-points";
 interface Props { onInsert: (source:string)=>void; onClose:()=>void }
@@ -26,6 +27,8 @@ export function CircleComposer({onInsert,onClose}:Props) {
     secantStartAngle:210,secantEndAngle:300,tangentAngle:60,
   });
   const [color,setColor]=useState("#0284c7");
+  const [tangentMode,setTangentMode]=useState<"angle"|"point">("angle");
+  const [tangentInput,setTangentInput]=useState<[string,string]>(["5","0"]);
   const previewRef=useRef<HTMLDivElement|null>(null);
   const reportRef=useRef<HTMLDivElement|null>(null);
   let geometry:CircleGeometry|undefined;
@@ -49,10 +52,17 @@ export function CircleComposer({onInsert,onClose}:Props) {
   } catch(e) {
     error=e instanceof Error?e.message:String(e);
   }
-  const savedFlags={...flags,showInteractiveControls:
-    (mode==="center-radius"||mode==="canonical")&&flags.showInteractiveControls};
+  const savedFlags=flags;
+  const tangentPoint:[number,number]=[Number(tangentInput[0]),Number(tangentInput[1])];
+  const settings={...savedFlags,...angles,color,tangentMode,tangentPoint};
   const invalidAngles=Object.values(angles).some(v=>!Number.isFinite(v)||Math.abs(v)>3600);
   if(!error&&invalidAngles)error="Los ángulos deben ser finitos y estar entre −3600° y 3600°.";
+  if(!error&&flags.showTangent&&tangentMode==="point"&&geometry){
+    if(tangentInput.some(v=>!v.trim())||!tangentPoint.every(Number.isFinite))
+      error="Introduce coordenadas numéricas para el punto P.";
+    else if(tangentsFromPoint(geometry,tangentPoint).length===0)
+      error="El punto está dentro del círculo: no existen tangentes reales.";
+  }
   if(!error&&(flags.showChord||flags.showSecant)){
     const same=(a:number,b:number)=>Math.abs(Math.sin((a-b)*Math.PI/360))<1e-8;
     if((flags.showChord&&same(angles.chordStartAngle,angles.chordEndAngle))||
@@ -66,7 +76,7 @@ export function CircleComposer({onInsert,onClose}:Props) {
     if(!geometry||error)return;
     const node={
       conicType:"circle",mode,
-      ...savedFlags,...angles,color,
+      ...settings,
     } as ConicNode;
     previewRef.current.appendChild(createCircleSVG(node,geometry));
     reportRef.current.appendChild(buildCircleReport(node,geometry));
@@ -102,7 +112,7 @@ export function CircleComposer({onInsert,onClose}:Props) {
     </label>;
   const insert=()=>{
     if(error||!geometry)return;
-    onInsert(serializeCircleBlock(mode,geometry,{...savedFlags,...angles,color},points));
+    onInsert(serializeCircleBlock(mode,geometry,settings,points));
     onClose();
   };
   return <section aria-label="Constructor de circunferencia">
@@ -143,9 +153,30 @@ export function CircleComposer({onInsert,onClose}:Props) {
         {toggle("showTangent","Tangente")}
         {toggle("showIntersections","Intersecciones con los ejes")}
         {toggle("showEquation","Mostrar ecuación")}
-        {(mode==="center-radius"||mode==="canonical")&&toggle("showInteractiveControls","Controles para mover y cambiar radio")}
+        {toggle("showInteractiveControls","Arrastrar centro y puntos en la gráfica")}
       </div>
     </fieldset>
+    {flags.showTangent&&<div className="bwjm-circle-tangent-input">
+      <label className="bwjm-modal-field">
+        <span className="bwjm-modal-label">Definir recta tangente</span>
+        <select className="bwjm-modal-input" aria-label="Definición de tangente"
+          value={tangentMode}
+          onChange={event=>setTangentMode(event.target.value as "angle"|"point")}>
+          <option value="angle">Ángulo sobre la circunferencia</option>
+          <option value="point">Por punto cartesiano P(x,y)</option>
+        </select>
+      </label>
+      {tangentMode==="point"&&<div className="bwjm-modal-grid">
+        {numeric("Punto P · x",tangentInput[0],value=>
+          setTangentInput(previous=>[value,previous[1]]))}
+        {numeric("Punto P · y",tangentInput[1],value=>
+          setTangentInput(previous=>[previous[0],value]))}
+        <p className="bwjm-circle-tangent-hint">
+          Si P pertenece a la circunferencia se muestra una tangente;
+          si es exterior se muestran las dos tangentes.
+        </p>
+      </div>}
+    </div>}
     <details className="bwjm-chart-source">
       <summary>Orientación de los elementos</summary>
       <div className="bwjm-modal-grid">
@@ -153,7 +184,7 @@ export function CircleComposer({onInsert,onClose}:Props) {
         {flags.showDiameter&&angle("diameterAngle","Diámetro")}
         {flags.showChord&&<>{angle("chordStartAngle","Inicio cuerda")}{angle("chordEndAngle","Fin cuerda")}</>}
         {flags.showSecant&&<>{angle("secantStartAngle","Inicio secante")}{angle("secantEndAngle","Fin secante")}</>}
-        {flags.showTangent&&angle("tangentAngle","Tangente en el punto")}
+        {flags.showTangent&&tangentMode==="angle"&&angle("tangentAngle","Tangente en el punto")}
       </div>
     </details>
     <label className="bwjm-modal-field">
@@ -165,7 +196,7 @@ export function CircleComposer({onInsert,onClose}:Props) {
       aria-label="Vista previa de las propiedades matemáticas" />
     {error&&<p className="bwjm-calculus-error" role="alert">{error}</p>}
     <details className="bwjm-chart-source"><summary>Ver código .bwjm</summary>
-      <pre className="bwjm-code-preview"><code>{geometry&&!error?serializeCircleBlock(mode,geometry,{...flags,...angles,color},points):"Revisa los parámetros."}</code></pre>
+      <pre className="bwjm-code-preview"><code>{geometry&&!error?serializeCircleBlock(mode,geometry,settings,points):"Revisa los parámetros."}</code></pre>
     </details>
     <div className="bwjm-modal-footer">
       <button type="button" className="bwjm-btn-secondary" onClick={onClose}>Cancelar</button>
