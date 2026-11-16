@@ -67,7 +67,7 @@ describe("scientific circle insertion",()=>{
     if(node?.type==="conic")expect(resolveCircle(node).radius).toBeCloseTo(2);
     const points=[[2,0],[0,2],[-2,0]] as Array<[number,number]>;
     const through=parseMathMD(serializeCircleBlock("three-points",
-      circleFromThreePoints(...points as [[number,number],[number,number],[number,number]]),{},points));
+      circleFromThreePoints(points[0],points[1],points[2]),{},points));
     expect(through.diagnostics.filter(d=>d.severity==="error")).toEqual([]);
     expect(through.children[0]).toMatchObject({type:"conic",mode:"three-points"});
   });
