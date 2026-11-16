@@ -1,9 +1,11 @@
 import type { ConicNode } from "@mathmd/ast";
 import { createCircleSVG } from "./circleFigure.js";
+import { createEllipseSVG } from "./ellipseFigure.js";
 
 /** Textbook-style, deterministic SVG scene. No embedded scripts or user-authored HTML. */
 export function createConicSVG(node: ConicNode): SVGSVGElement {
   if ((node.conicType ?? "circle") === "circle") return createCircleSVG(node);
+  if (node.conicType === "ellipse") return createEllipseSVG(node);
   const NS = "http://www.w3.org/2000/svg";
   const el = (name: string, attrs: Record<string, string | number> = {}) => {
     const item = document.createElementNS(NS, name);
