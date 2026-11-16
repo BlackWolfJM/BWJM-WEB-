@@ -36,13 +36,17 @@ import { DocumentTabs } from "./DocumentTabs.js";
 import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
 import { createCrossProductDeterminant, createCrossProductEditor, createCrossProductReport } from "./CrossProductEditor.js";
 import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
-import { resetSurfaceColor, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
+import { resetSurfaceColor, updateCircleDimensions, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
 import { FormulaModal } from "./FormulaModal.js";
 import { ConicModal } from "./ConicModal.js";
 import { createConicSVG } from "./conicFigure.js";
+import { createCircleSVG } from "./circleFigure.js";
+import { resolveCircle } from "./circleGeometry.js";
+import { buildCircleReport } from "./circleReport.js";
+import { mountCircleControls } from "./circleControls.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
 import { ImageModal, type ImageInsertion } from "./ImageModal.js";
 import { insertEmbeddedImage } from "./documentImages.js";
@@ -1279,6 +1283,7 @@ initialConditions:
         cardHeader.className = "bwjm-node-header";
         const graphLabel = node.type === "calculusviz"
           ? node.mode === "riemann" ? "Área entre curvas" : "Áreas e integrales"
+          : node.type === "conic" ? (node.conicType === "circle" || !node.conicType ? "Circunferencia" : "Cónica")
           : node.type === "datachart" ? "Gráfica de datos" : graphLabels.get(node.type);
         cardHeader.innerHTML = `
           <span class="bwjm-node-tag">
@@ -1297,6 +1302,15 @@ initialConditions:
           formula.innerHTML = renderMathToString(latex, false);
           formula.title = node.type === "curve3d" ? [node.x, node.y, node.z].join(" , ")
             : node.type === "parametric2d" ? [node.x, node.y].join(" , ") : node.equation;
+          cardHeader.appendChild(formula);
+        }
+        if (node.type === "conic" && (!node.conicType || node.conicType === "circle") &&
+            node.showEquation !== false) {
+          const formula = document.createElement("div");
+          formula.className = "bwjm-node-equation";
+          const circle = resolveCircle(node);
+          formula.innerHTML = renderMathToString(circle.canonicalTex, false);
+          formula.title = circle.canonicalTex;
           cardHeader.appendChild(formula);
         }
         card.appendChild(cardHeader);
@@ -1322,7 +1336,7 @@ initialConditions:
 
         // Graph settings persist in the selected code fence, avoiding transient-only UI state.
         if (supportsAdaptiveParameters(node) || node.type === "crossproduct" || node.type === "datachart" ||
-          node.type === "line3d" || node.type === "plane3d" ||
+          node.type === "line3d" || node.type === "plane3d" || node.type === "conic" ||
           ((node.type === "vector2d" || node.type === "vector3d") && Boolean(node.mode))) {
           const options: Array<[string, string, string?]> = node.type === "curve3d" ? [
             ["animated", "Animar partícula"],
@@ -1362,6 +1376,16 @@ initialConditions:
             ["showAnticommutative", "Superponer normal opuesta (anticonmutatividad)"],
             ["showDistributive", "Distribución sobre suma u × (v + w)"],
             ["showIdentities", "Inspector de identidades guiadas"],
+          ] : node.type === "conic" && (!node.conicType || node.conicType === "circle") ? [
+            ["showCenter", "Centro"],
+            ["showRadius", "Radio"],
+            ["showDiameter", "Diámetro"],
+            ["showChord", "Cuerda"],
+            ["showSecant", "Secante"],
+            ["showTangent", "Tangente"],
+            ["showIntersections", "Intersecciones con los ejes"],
+            ["showEquation", "Ecuación"],
+            ["showInteractiveControls", "Controles para mover y cambiar radio"],
           ] : node.type === "line3d" ? [
             ["showPoint", "Mostrar punto P"],
             ["showDirection", "Mostrar vector director v"],
@@ -1413,7 +1437,8 @@ initialConditions:
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             const configured = (node as unknown as Record<string, unknown>)[key];
-            const defaultOn = node.type === "crossproduct" ? ["showPlane", "showNormal", "showArea"].includes(key) :
+            const defaultOn = node.type === "conic" ? ["showCenter", "showEquation"].includes(key) :
+              node.type === "crossproduct" ? ["showPlane", "showNormal", "showArea"].includes(key) :
               key === "showSteps" || (key === "animated" && node.type === "parametric2d") ||
               (key === "showVectors" && node.type === "flow2d");
             checkbox.checked = typeof configured === "boolean" ? configured : defaultOn;
@@ -1437,6 +1462,10 @@ initialConditions:
               color => saveOption("color", color));
             if (node.contours) appendGraphColor(settingsRows, "Color de las curvas de nivel", node.contourColor,
               "#fbbf24", color => saveOption("contourColor", color));
+          } else if (node.type === "conic") {
+            appendGraphSettingGroup(settingsRows, "Apariencia");
+            appendGraphColor(settingsRows, "Color de la cónica", node.color, "#0284c7",
+              color => saveOption("color", color));
           } else if (node.type === "crossproduct") {
             appendGraphSettingGroup(settingsRows, "Apariencia");
             appendGraphColor(settingsRows, "Color del vector u", node.colorU, "#0284c7", color => saveOption("colorU", color));
@@ -2005,8 +2034,31 @@ initialConditions:
           cardBody.appendChild(report);
           }
         } else if (node.type === "conic") {
-          const figure = createConicSVG(node);
+          let figure = createConicSVG(node);
           cardBody.appendChild(figure);
+          if (!node.conicType || node.conicType === "circle") {
+            const originalGeometry = resolveCircle(node);
+            let report = buildCircleReport(node, originalGeometry);
+            cardBody.appendChild(report);
+            mountCircleControls(cardBody, node, originalGeometry,
+              next => {
+                const fresh = createCircleSVG(node, next);
+                figure.replaceWith(fresh);
+                figure = fresh;
+                const updatedReport = buildCircleReport(node, next);
+                report.replaceWith(updatedReport);
+                report = updatedReport;
+                if (node.showEquation !== false) {
+                  const headerEquation = cardHeader.querySelector(".bwjm-node-equation");
+                  if (headerEquation) headerEquation.innerHTML = renderMathToString(next.canonicalTex, false);
+                }
+              },
+              (center,radius) => {
+                openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
+                setMarkdown(previous => updateCircleDimensions(previous, node.range,
+                  [center[0],center[1]],radius));
+              });
+          }
           const button = document.createElement("button");
           button.type = "button";
           button.className = "bwjm-export-svg";
