@@ -47,6 +47,8 @@ export function CircleComposer({onInsert,onClose}:Props) {
   } catch(e) {
     error=e instanceof Error?e.message:String(e);
   }
+  const savedFlags={...flags,showInteractiveControls:
+    (mode==="center-radius"||mode==="canonical")&&flags.showInteractiveControls};
   const invalidAngles=Object.values(angles).some(v=>!Number.isFinite(v)||Math.abs(v)>3600);
   if(!error&&invalidAngles)error="Los ángulos deben ser finitos y estar entre −3600° y 3600°.";
   if(!error&&(flags.showChord||flags.showSecant)){
@@ -61,7 +63,7 @@ export function CircleComposer({onInsert,onClose}:Props) {
     if(!geometry||error)return;
     const node={
       conicType:"circle",mode,
-      ...flags,...angles,color,
+      ...savedFlags,...angles,color,
     } as ConicNode;
     previewRef.current.appendChild(createCircleSVG(node,geometry));
   });
@@ -96,7 +98,7 @@ export function CircleComposer({onInsert,onClose}:Props) {
     </label>;
   const insert=()=>{
     if(error||!geometry)return;
-    onInsert(serializeCircleBlock(mode,geometry,{...flags,...angles,color},points));
+    onInsert(serializeCircleBlock(mode,geometry,{...savedFlags,...angles,color},points));
     onClose();
   };
   return <section aria-label="Constructor de circunferencia">
@@ -137,7 +139,7 @@ export function CircleComposer({onInsert,onClose}:Props) {
         {toggle("showTangent","Tangente")}
         {toggle("showIntersections","Intersecciones con los ejes")}
         {toggle("showEquation","Mostrar ecuación")}
-        {toggle("showInteractiveControls","Controles para mover y cambiar radio")}
+        {(mode==="center-radius"||mode==="canonical")&&toggle("showInteractiveControls","Controles para mover y cambiar radio")}
       </div>
     </fieldset>
     <details className="bwjm-chart-source">
