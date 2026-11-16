@@ -1747,6 +1747,9 @@ export function validateConic(data: any, ctx: z.RefinementCtx): void {
         (data.conicType === "parabola" && !data.focalParameter)) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Faltan parámetros canónicos de la cónica", path: ["mode"] });
     }
+    if (data.conicType === "ellipse" && data.semiMinorAxis > data.semiMajorAxis) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "El semieje menor no puede superar al semieje mayor", path: ["semiMinorAxis"] });
+    }
   } else if (mode === "focus-directrix") {
     if (!data.focus || !data.directrix) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo focus-directrix requiere focus y directrix", path: ["mode"] });
