@@ -20,7 +20,7 @@ export function ConicModal({onClose,onInsert}:Props) {
   const center=[Number(h),Number(k)], ra=Number(a), rb=Number(b), focal=Number(p),angle=Number(rotation);
   const invalid=![...center,ra,rb,focal,angle].every(Number.isFinite)
     || ra<=0 || rb<=0 || (kind==="ellipse"&&rb>ra) || focal===0
-    || Math.max(Math.abs(...center),ra,rb,Math.abs(focal))>10000;
+    || Math.max(Math.abs(center[0]),Math.abs(center[1]),ra,rb,Math.abs(focal))>10000;
   const insert=()=>{
     if(invalid)return;
     const rows=[
