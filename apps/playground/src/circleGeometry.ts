@@ -66,7 +66,7 @@ export function circleFromCoefficients(c: CircleCoefficients): CircleGeometry {
  */
 export function parseCircleEquation(input: string): CircleCoefficients {
   const cleaned = input.replace(/²/g,"^2").replace(/−/g,"-").replace(/\s+/g,"");
-  if (cleaned.length>256 || !/^[0-9xy+\-*/^().=]+$/i.test(cleaned) ||
+  if (cleaned.length>256 || !/^[0-9xy+\-*\/^().=]+$/i.test(cleaned) ||
     cleaned.split("=").length!==2) throw new Error("Escribe una ecuación numérica en x e y con un signo =.");
   const [left,right] = cleaned.split("=");
   if (!left || !right) throw new Error("Completa ambos lados de la ecuación.");
