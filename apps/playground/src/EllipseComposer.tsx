@@ -4,8 +4,11 @@ import { ellipseFromCenter, ellipseFromFoci, serializeEllipseBlock,
   type EllipseGeometry } from "./ellipseGeometry.js";
 import { createEllipseSVG } from "./ellipseFigure.js";
 import { buildEllipseReport } from "./ellipseReport.js";
+import { coefficientsFromEllipse, ellipseFromGeneral, parseEllipseEquation,
+  type EllipseCoefficients } from "./ellipseEquation.js";
+import { mountEllipseDrag, type EllipseInteraction } from "./ellipseDrag.js";
 
-type Definition = "canonical" | "foci";
+type Definition = "canonical" | "foci" | "general";
 interface Props { onInsert:(source:string)=>void; onClose:()=>void }
 export function EllipseComposer({onInsert,onClose}:Props){
   const [mode,setMode]=useState<Definition>("canonical");
@@ -16,10 +19,12 @@ export function EllipseComposer({onInsert,onClose}:Props){
   const [f1,setF1]=useState<[string,string]>(["-3","0"]);
   const [f2,setF2]=useState<[string,string]>(["3","0"]);
   const [sum,setSum]=useState("10");
+  const [generalEquation,setGeneralEquation]=useState("x^2/25+y^2/16=1");
   const [flags,setFlags]=useState({
     showCenter:true,showFocus:true,showVertices:true,showCoVertices:true,
     showAxes:true,showDirectrices:false,showLatusRectum:false,
-    showTangent:false,showEquation:true,showInteractiveControls:true,
+    showTangent:false,showNormal:false,showIntersections:true,showParametric:true,
+    showEquation:true,showInteractiveControls:true,
   });
   const [tangentAngle,setTangentAngle]=useState("45");
   const [color,setColor]=useState("#2563eb");
@@ -28,11 +33,17 @@ export function EllipseComposer({onInsert,onClose}:Props){
   let geometry:EllipseGeometry|undefined;
   let error="";
   let fociInput: {focus1:[number,number];focus2:[number,number];sumDistances:number}|undefined;
+  let generalInput:EllipseCoefficients|undefined;
   try{
     if(mode==="canonical"){
       const strings=[h,k,a,b,rotation];
       if(strings.some(value=>!value.trim()))throw new Error("Completa el centro, semiejes y rotación.");
       geometry=ellipseFromCenter([Number(h),Number(k)],Number(a),Number(b),axis,Number(rotation));
+    }else if(mode==="general"){
+      if(!generalEquation.trim())throw new Error("Introduce la ecuación general de la elipse.");
+      generalInput=parseEllipseEquation(generalEquation);
+      const shape=ellipseFromGeneral(generalInput);
+      geometry=ellipseFromCenter(shape.center,shape.a,shape.b,"x",shape.rotation);
     }else{
       const all=[...f1,...f2,sum];
       if(all.some(value=>!value.trim()))throw new Error("Completa los focos y la suma de distancias.");
@@ -44,16 +55,50 @@ export function EllipseComposer({onInsert,onClose}:Props){
       Math.abs(Number(tangentAngle))>3600)
       throw new Error("El ángulo de tangencia debe ser finito y estar entre −3600° y 3600°.");
   }catch(e){error=e instanceof Error?e.message:String(e);}
-  const options={...flags,showInteractiveControls:mode==="canonical"&&flags.showInteractiveControls,
-    tangentAngle:Number(tangentAngle),color};
+  const options={...flags,tangentAngle:Number(tangentAngle),color};
   useEffect(()=>{
-    if(!previewRef.current||!reportRef.current)return;
-    previewRef.current.replaceChildren();
-    reportRef.current.replaceChildren();
+    const figureHost=previewRef.current,reportHost=reportRef.current;
+    if(!figureHost||!reportHost)return;
+    figureHost.replaceChildren();
+    reportHost.replaceChildren();
     if(!geometry||error)return;
+    const original=geometry;
     const node={type:"conic",conicType:"ellipse",mode,...options} as ConicNode;
-    previewRef.current.appendChild(createEllipseSVG(node,geometry));
-    reportRef.current.appendChild(buildEllipseReport(node,geometry));
+    const preview=(next:EllipseGeometry,change:EllipseInteraction={})=>{
+      const viewNode={...node,viewCenter:node.viewCenter??original.center,
+        viewSpan:node.viewSpan??Math.max(4,original.a*1.7,original.b*2,
+          node.showDirectrices&&original.directrixOffset!==undefined&&
+          original.directrixOffset<=original.a*4?original.directrixOffset*1.15:0),
+        tangentAngle:change.tangentAngle??node.tangentAngle};
+      figureHost.replaceChildren(createEllipseSVG(viewNode,next));
+      reportHost.replaceChildren(buildEllipseReport(viewNode,next));
+    };
+    preview(original);
+    return mountEllipseDrag(figureHost,node,original,preview,change=>{
+      if(change.tangentAngle!==undefined)setTangentAngle(String(change.tangentAngle));
+      if(change.center||change.a!==undefined||change.b!==undefined){
+        const next=ellipseFromCenter(change.center??original.center,change.a??original.a,
+          change.b??original.b,"x",original.rotation);
+        if(mode==="canonical"){
+          setH(String(next.center[0]));setK(String(next.center[1]));
+          setA(String(next.a));setB(String(next.b));
+        }else if(mode==="foci"){
+          setF1(next.focus1.map(String) as [string,string]);
+          setF2(next.focus2.map(String) as [string,string]);
+          setSum(String(2*next.a));
+        }else{
+          const previous=generalInput??coefficientsFromEllipse(original.center,
+            original.a,original.b,original.rotation);
+          const baseline=coefficientsFromEllipse(original.center,original.a,original.b,original.rotation);
+          const ratio=previous.A/baseline.A;
+          const newer=coefficientsFromEllipse(next.center,next.a,next.b,next.rotation);
+          const expression=["A","B","C","D","E","F"].map(key=>
+            String(newer[key as keyof EllipseCoefficients]*ratio));
+          const [A,B,C,D,E,F]=expression;
+          setGeneralEquation(A+"*x^2+"+B+"*x*y+"+C+"*y^2+"+D+"*x+"+E+"*y+"+F+"=0");
+        }
+      }
+    });
   });
   const numeric=(label:string,value:string,change:(value:string)=>void)=>
     <label className="bwjm-modal-field">
@@ -79,7 +124,7 @@ export function EllipseComposer({onInsert,onClose}:Props){
     </label>;
   const insert=()=>{
     if(error||!geometry)return;
-    onInsert(serializeEllipseBlock(mode,geometry,options,fociInput));
+    onInsert(serializeEllipseBlock(mode,geometry,options,fociInput,generalInput));
     onClose();
   };
   return <section className="bwjm-ellipse-composer" aria-label="Constructor de elipse">
@@ -89,9 +134,16 @@ export function EllipseComposer({onInsert,onClose}:Props){
         onChange={event=>setMode(event.target.value as Definition)}>
         <option value="canonical">Centro, semiejes y orientación</option>
         <option value="foci">Dos focos y suma de distancias</option>
+        <option value="general">Ecuación general con término Bxy</option>
       </select>
     </label>
-    {mode==="canonical"?<div className="bwjm-modal-grid">
+    {mode==="general"?<label className="bwjm-modal-field">
+      <span className="bwjm-modal-label">Ax² + Bxy + Cy² + Dx + Ey + F = 0</span>
+      <input className="bwjm-modal-input" value={generalEquation}
+        aria-label="Ecuación general de la elipse"
+        onChange={event=>setGeneralEquation(event.target.value)}/>
+      <small>Admite rotación y coeficientes decimales; usa * para multiplicar, por ejemplo 2*x*y.</small>
+    </label>:mode==="canonical"?<div className="bwjm-modal-grid">
       {numeric("Centro h",h,setH)}{numeric("Centro k",k,setK)}
       {numeric("Semieje mayor a",a,setA)}{numeric("Semieje menor b",b,setB)}
       <label className="bwjm-modal-field">
@@ -118,11 +170,15 @@ export function EllipseComposer({onInsert,onClose}:Props){
         {toggle("showDirectrices","Directrices")}
         {toggle("showLatusRectum","Lados rectos")}
         {toggle("showTangent","Tangente")}
+        {toggle("showNormal","Normal")}
+        {toggle("showIntersections","Cortes con los ejes")}
+        {toggle("showParametric","Parametrización")}
         {toggle("showEquation","Mostrar ecuación")}
-        {mode==="canonical"&&toggle("showInteractiveControls","Trasladar y cambiar semiejes")}
+        {toggle("showInteractiveControls","Arrastrar centro y puntos geométricos")}
       </div>
     </fieldset>
-    {flags.showTangent&&numeric("Ángulo del punto de tangencia (°)",tangentAngle,setTangentAngle)}
+    {(flags.showTangent||flags.showNormal)&&numeric("Ángulo del punto seleccionado (°)",
+      tangentAngle,setTangentAngle)}
     <label className="bwjm-modal-field">
       <span className="bwjm-modal-label">Color de la elipse</span>
       <input type="color" value={color} onChange={event=>setColor(event.target.value)}/>
@@ -133,7 +189,7 @@ export function EllipseComposer({onInsert,onClose}:Props){
     {error&&<p className="bwjm-calculus-error" role="alert">{error}</p>}
     <details className="bwjm-chart-source"><summary>Ver código .bwjm</summary>
       <pre className="bwjm-code-preview"><code>{geometry&&!error?
-        serializeEllipseBlock(mode,geometry,options,fociInput):"Revisa los parámetros."}</code></pre>
+        serializeEllipseBlock(mode,geometry,options,fociInput,generalInput):"Revisa los parámetros."}</code></pre>
     </details>
     <div className="bwjm-modal-footer">
       <button type="button" className="bwjm-btn-secondary" onClick={onClose}>Cancelar</button>
