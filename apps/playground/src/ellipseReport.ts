@@ -3,6 +3,7 @@ import { renderToString } from "katex";
 import { resolveEllipse, type EllipseGeometry } from "./ellipseGeometry.js";
 import { circleNumber, degreesToPiRadians } from "./circleReadout.js";
 import { exactScalarTex } from "./circleExact.js";
+import { ellipseAxisCrossingTex } from "./ellipseExact.js";
 import { circleLineTex } from "./circleConstructions.js";
 import { coefficientsFromEllipse, ellipseAxisCrossings, ellipseParametricTex,
   ellipseTangentNormal } from "./ellipseEquation.js";
@@ -16,8 +17,7 @@ export function ellipseMetrics(node:ConicNode,geom:EllipseGeometry=resolveEllips
     ? {A:node.A!,B:node.B!,C:node.C!,D:node.D!,E:node.E!,F:node.F!}
     : coefficientsFromEllipse(geom.center,geom.a,geom.b,geom.rotation);
   const crossings=ellipseAxisCrossings(original);
-  const asPoints=(points:readonly[number,number][])=>points.length
-    ? points.map(coord).join(",\\;"):"Ninguno";
+  const crossingText=ellipseAxisCrossingTex(original);
   const angle=(node.tangentAngle??45)*Math.PI/180;
   const lines=ellipseTangentNormal(geom,angle);
   const nearAxis=(number:number)=>Math.abs(number)<1e-10;
@@ -26,7 +26,10 @@ export function ellipseMetrics(node:ConicNode,geom:EllipseGeometry=resolveEllips
       ? "x="+exactScalarTex(geom.center[0])+"\\pm "+exactScalarTex(geom.directrixOffset)
       : nearAxis(Math.cos(geom.rotation))
         ? "y="+exactScalarTex(geom.center[1])+"\\pm "+exactScalarTex(geom.directrixOffset)
-        : "X=\\pm "+exactScalarTex(geom.directrixOffset);
+        : "\\cos\\theta\\left(x"+(geom.center[0]<0?"+":"-")+
+          circleNumber(Math.abs(geom.center[0]))+"\\right)+\\sin\\theta\\left(y"+
+          (geom.center[1]<0?"+":"-")+circleNumber(Math.abs(geom.center[1]))+
+          "\\right)=\\pm "+exactScalarTex(geom.directrixOffset);
   return [
     {label:"Centro",value:coord(geom.center),math:true},
     {label:"Semieje mayor a",value:circleNumber(geom.a),math:true},
@@ -44,8 +47,8 @@ export function ellipseMetrics(node:ConicNode,geom:EllipseGeometry=resolveEllips
     {label:"Lado recto",value:circleNumber(geom.latusRectum),math:true},
     {label:"Directrices",value:directrix,math:geom.directrixOffset!==undefined},
     {label:"Orientación",value:degreesToPiRadians(geom.rotation*180/Math.PI),math:true},
-    {label:"Cortes con eje X",value:asPoints(crossings.x),math:crossings.x.length>0},
-    {label:"Cortes con eje Y",value:asPoints(crossings.y),math:crossings.y.length>0},
+    {label:"Cortes con eje X",value:crossingText.x,math:crossings.x.length>0},
+    {label:"Cortes con eje Y",value:crossingText.y,math:crossings.y.length>0},
     {label:"Tangente · ecuación",value:circleLineTex(lines.tangent),math:true},
     {label:"Normal · ecuación",value:circleLineTex(lines.normal),math:true},
     {label:"Punto de tangencia",value:coord(lines.point),math:true},
