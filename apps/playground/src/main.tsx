@@ -36,7 +36,7 @@ import { DocumentTabs } from "./DocumentTabs.js";
 import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
 import { createCrossProductDeterminant, createCrossProductEditor, createCrossProductReport } from "./CrossProductEditor.js";
 import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
-import { resetSurfaceColor, updateCircleDimensions, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
+import { resetSurfaceColor, updateCircleDimensions, updateEllipseDimensions, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
@@ -45,6 +45,10 @@ import { createConicSVG } from "./conicFigure.js";
 import { createCircleSVG } from "./circleFigure.js";
 import { resolveCircle } from "./circleGeometry.js";
 import { buildCircleReport } from "./circleReport.js";
+import { buildEllipseReport } from "./ellipseReport.js";
+import { createEllipseSVG } from "./ellipseFigure.js";
+import { resolveEllipse } from "./ellipseGeometry.js";
+import { mountEllipseControls } from "./ellipseControls.js";
 import { mountCircleControls } from "./circleControls.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
 import { ImageModal, type ImageInsertion } from "./ImageModal.js";
@@ -1280,7 +1284,7 @@ initialConditions:
         cardHeader.className = "bwjm-node-header";
         const graphLabel = node.type === "calculusviz"
           ? node.mode === "riemann" ? "Área entre curvas" : "Áreas e integrales"
-          : node.type === "conic" ? (node.conicType === "circle" || !node.conicType ? "Circunferencia" : "Cónica")
+          : node.type === "conic" ? (node.conicType === "circle" || !node.conicType ? "Circunferencia" : node.conicType === "ellipse" ? "Elipse" : node.conicType === "parabola" ? "Parábola" : "Hipérbola")
           : node.type === "datachart" ? "Gráfica de datos" : graphLabels.get(node.type);
         cardHeader.innerHTML = `
           <span class="bwjm-node-tag">
@@ -1374,6 +1378,17 @@ initialConditions:
             ["showIntersections", "Intersecciones con los ejes"],
             ["showEquation", "Ecuación"],
             ["showInteractiveControls", "Controles para mover y cambiar radio"],
+          ] : node.type === "conic" && node.conicType === "ellipse" ? [
+            ["showCenter", "Centro"],
+            ["showFocus", "Focos"],
+            ["showVertices", "Vértices"],
+            ["showCoVertices", "Co-vértices"],
+            ["showAxes", "Ejes mayor y menor"],
+            ["showDirectrices", "Directrices"],
+            ["showLatusRectum", "Lados rectos"],
+            ["showTangent", "Tangente"],
+            ["showEquation", "Ecuación"],
+            ["showInteractiveControls", "Trasladar y cambiar semiejes"],
           ] : node.type === "line3d" ? [
             ["showPoint", "Mostrar punto P"],
             ["showDirection", "Mostrar vector director v"],
@@ -1425,7 +1440,9 @@ initialConditions:
             const checkbox = document.createElement("input");
             checkbox.type = "checkbox";
             const configured = (node as unknown as Record<string, unknown>)[key];
-            const defaultOn = node.type === "conic" ? ["showCenter", "showEquation"].includes(key) :
+            const defaultOn = node.type === "conic" ? (node.conicType === "ellipse"
+                ? ["showCenter","showFocus","showVertices","showCoVertices","showAxes","showEquation"].includes(key)
+                : ["showCenter", "showEquation"].includes(key)) :
               node.type === "crossproduct" ? ["showPlane", "showNormal", "showArea"].includes(key) :
               key === "showSteps" || (key === "animated" && node.type === "parametric2d") ||
               (key === "showVectors" && node.type === "flow2d");
@@ -2041,6 +2058,24 @@ initialConditions:
                 openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
                 setMarkdown(previous => updateCircleDimensions(previous, node.range,
                   [center[0],center[1]],radius));
+              });
+          } else if (node.conicType === "ellipse") {
+            const geometry = resolveEllipse(node);
+            let report = buildEllipseReport(node,geometry);
+            cardBody.appendChild(report);
+            mountEllipseControls(cardBody,node,geometry,
+              next => {
+                const fresh = createEllipseSVG(node,next);
+                figure.replaceWith(fresh);
+                figure = fresh;
+                const updatedReport = buildEllipseReport(node,next);
+                report.replaceWith(updatedReport);
+                report = updatedReport;
+              },
+              (center,a,b) => {
+                openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
+                setMarkdown(previous => updateEllipseDimensions(previous,node.range,
+                  [center[0],center[1]],a,b));
               });
           }
           const button = document.createElement("button");
