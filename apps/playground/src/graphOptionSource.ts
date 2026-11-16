@@ -197,3 +197,27 @@ export function updateCircleDimensions(
     parsed.mode!=="general"&&parsed.mode!=="three-points"&&
     parsed.radius===radius&&parsed.center?.every((v,i)=>v===center[i])?second:source;
 }
+
+/** Persist a canonical ellipse's editable parameters without touching other blocks. */
+export function updateEllipseDimensions(
+  source:string,range:SourceRange,center:readonly[number,number],a:number,b:number,
+):string {
+  if(!center.every(Number.isFinite)||center.some(v=>Math.abs(v)>10000)||
+    !Number.isFinite(a)||!Number.isFinite(b)||a<=0||b<=0||b>a||a>10000)return source;
+  let next=source;
+  let currentRange=range;
+  for(const [key,value] of [
+    ["center",center],["semiMajorAxis",a],["semiMinorAxis",b],
+  ] as Array<[string,GraphOptionValue]>){
+    const changed=updateGraphField(next,currentRange,"conic",key,value);
+    if(changed===next)return source;
+    currentRange={...currentRange,end:{...currentRange.end,
+      offset:currentRange.end.offset+changed.length-next.length}};
+    next=changed;
+  }
+  const parsed=parseMathMD(next.slice(range.start.offset,currentRange.end.offset)).children[0];
+  return parsed?.type==="conic"&&parsed.conicType==="ellipse"&&
+    (parsed.mode==="canonical"||parsed.mode==="center-axes")&&
+    parsed.center?.every((v,i)=>v===center[i])&&
+    parsed.semiMajorAxis===a&&parsed.semiMinorAxis===b?next:source;
+}
