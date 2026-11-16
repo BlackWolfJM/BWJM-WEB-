@@ -483,6 +483,8 @@ export interface ConicNode extends MathMDNodeBase {
   showAxes?: boolean;
   showAsymptotes?: boolean;
   showDirectrices?: boolean;
+  showCoVertices?: boolean;
+  showLatusRectum?: boolean;
   /** Circle-only annotation layers; undefined means the layer is disabled. */
   showRadius?: boolean;
   showDiameter?: boolean;
@@ -1737,6 +1739,8 @@ export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   showAxes: z.boolean().optional(),
   showAsymptotes: z.boolean().optional(),
   showDirectrices: z.boolean().optional(),
+  showCoVertices: z.boolean().optional(),
+  showLatusRectum: z.boolean().optional(),
   showRadius: z.boolean().optional(),
   showDiameter: z.boolean().optional(),
   showChord: z.boolean().optional(),
