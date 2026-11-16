@@ -104,7 +104,7 @@ export function resolveEllipse(node:Pick<ConicNode,"mode"|"center"|"semiMajorAxi
 export function serializeEllipseBlock(mode:"canonical"|"foci",
   geometry:EllipseGeometry,options:Record<string,number|boolean|string>,
   foci?:{focus1:[number,number];focus2:[number,number];sumDistances:number}):string {
-  const rows=["\`\`\`conic","conicType: ellipse","mode: "+mode];
+  const rows=["```conic","conicType: ellipse","mode: "+mode];
   if(mode==="foci" && foci){
     rows.push("focus1: "+JSON.stringify(foci.focus1),"focus2: "+JSON.stringify(foci.focus2),
       "sumDistances: "+foci.sumDistances);
@@ -114,6 +114,6 @@ export function serializeEllipseBlock(mode:"canonical"|"foci",
       "axis: x","rotation: "+geometry.rotation);
   }
   for(const [name,value] of Object.entries(options)) rows.push(name+": "+JSON.stringify(value));
-  rows.push("\`\`\`");
+  rows.push("```");
   return "\n"+rows.join("\n")+"\n";
 }
