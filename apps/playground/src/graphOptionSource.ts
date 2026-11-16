@@ -210,7 +210,6 @@ export function updateEllipseDimensions(
     ["center",center],["semiMajorAxis",a],["semiMinorAxis",b],
   ] as Array<[string,GraphOptionValue]>){
     const changed=updateGraphField(next,currentRange,"conic",key,value);
-    if(changed===next)return source;
     currentRange={...currentRange,end:{...currentRange.end,
       offset:currentRange.end.offset+changed.length-next.length}};
     next=changed;
