@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { CircleComposer } from "./CircleComposer.js";
 
 type Kind = "circle"|"ellipse"|"parabola"|"hyperbola";
 interface Props { onClose: () => void; onInsert: (block: string) => void }
@@ -57,16 +58,17 @@ export function ConicModal({onClose,onInsert}:Props) {
             {choices.map(([value,label])=><option key={value} value={value}>{label}</option>)}
           </select>
         </label>
+        {kind === "circle" ? <CircleComposer onInsert={onInsert} onClose={onClose}/> : <>
         <div className="bwjm-modal-grid">
           {field("Centro o vértice: x",h,setH)}
           {field("Centro o vértice: y",k,setK)}
-          {kind!=="parabola"&&field(kind==="circle"?"Radio":"Semieje a",a,setA)}
+          {kind!=="parabola"&&field("Semieje a",a,setA)}
           {(kind==="ellipse"||kind==="hyperbola")&&field("Semieje b",b,setB)}
           {kind==="parabola"&&field("Parámetro focal p (con signo)",p,setP)}
-          {kind!=="circle"&&<label className="bwjm-modal-field"><span className="bwjm-modal-label">Eje principal</span>
+          <label className="bwjm-modal-field"><span className="bwjm-modal-label">Eje principal</span>
             <select className="bwjm-modal-input" value={axis} onChange={e=>setAxis(e.target.value as "x"|"y")}>
               <option value="x">Horizontal</option><option value="y">Vertical</option>
-            </select></label>}
+            </select></label>
           {(kind==="ellipse"||kind==="hyperbola")&&field("Rotación (radianes)",rotation,setRotation)}
         </div>
         <fieldset><legend>Mostrar propiedades geométricas</legend>
@@ -77,11 +79,12 @@ export function ConicModal({onClose,onInsert}:Props) {
           {kind==="hyperbola"&&<label><input type="checkbox" checked={showAsymptotes} onChange={e=>setShowAsymptotes(e.target.checked)}/> Asíntotas</label>}
         </fieldset>
         {invalid&&<p role="alert">Revisa los valores: semiejes positivos, b ≤ a para elipse y p distinto de cero.</p>}
+        <footer className="bwjm-modal-footer">
+          <button className="bwjm-btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="bwjm-btn-primary" disabled={invalid} onClick={insert}>Insertar en documento</button>
+        </footer>
+        </>}
       </div>
-      <footer className="bwjm-modal-footer">
-        <button className="bwjm-btn-secondary" onClick={onClose}>Cancelar</button>
-        <button className="bwjm-btn-primary" disabled={invalid} onClick={insert}>Insertar en documento</button>
-      </footer>
     </section>
   </div>;
 }

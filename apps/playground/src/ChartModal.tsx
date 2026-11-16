@@ -4,6 +4,7 @@ import { extractFreeParameters } from "@mathmd/math";
 import { IconX, IconCheck, IconBarChart } from "./icons.js";
 import { CalculusWizard } from "./CalculusWizard.js";
 import { ChartKindIcon } from "./ChartKindIcon.js";
+import { CircleComposer } from "./CircleComposer.js";
 
 interface ChartModalProps {
   isOpen: boolean;
@@ -15,6 +16,7 @@ interface ChartModalProps {
 export const chartKinds = [
   ["plot2d", "Función 2D"],
   ["surface3d", "Superficie 3D"],
+  ["circle", "Circunferencia"],
   ["curve3d", "Curva 3D"],
   ["parametric2d", "Curva paramétrica 2D"],
   ["vectorfield2d", "Campo vectorial 2D"],
@@ -211,6 +213,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ isOpen, documentVariable
             </button>)}
           </div>
 
+          {kind === "circle" && <CircleComposer onInsert={onInsert} onClose={onClose}/>}
           {kind === "calculus" && (
             <CalculusWizard onInsert={(block) => { onInsert(block); onClose(); }} />
           )}
@@ -592,7 +595,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ isOpen, documentVariable
             </div>
           </fieldset>}
           {error && <p role="alert" className="bwjm-calculus-error">{error}</p>}
-          {kind !== "calculus" && <details className="bwjm-chart-source">
+          {kind !== "calculus" && kind !== "circle" && <details className="bwjm-chart-source">
             <summary>Ver código .bwjm</summary>
             <pre className="bwjm-code-preview">
               <code>{generatedCode}</code>
@@ -600,7 +603,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ isOpen, documentVariable
           </details>}
         </div>
 
-        <div className="bwjm-modal-footer">
+        {kind !== "circle" && <div className="bwjm-modal-footer">
           <button className="bwjm-btn-secondary" onClick={onClose}>
             Cancelar
           </button>
@@ -608,7 +611,7 @@ export const ChartModal: React.FC<ChartModalProps> = ({ isOpen, documentVariable
             <IconCheck size={14} />
             <span>Insertar</span>
           </button>}
-        </div>
+        </div>}
       </div>
     </div>
   );
