@@ -7,6 +7,7 @@ import { coefficientsFromEllipse, ellipseAxisCrossings, ellipseFromGeneral,
   parseEllipseEquation } from "../src/ellipseEquation.js";
 import { ellipseMetrics } from "../src/ellipseReport.js";
 import { ellipseDragChange } from "../src/ellipseDrag.js";
+import { ellipseAxisCrossingTex } from "../src/ellipseExact.js";
 import { updateEllipseInteraction } from "../src/graphOptionSource.js";
 
 const close=(a:number,b:number)=>expect(a).toBeCloseTo(b,6);
@@ -89,6 +90,15 @@ describe("Ellipse lines, crossings and parametrization",()=>{
     const cuts=ellipseAxisCrossings(coefficientsFromEllipse(translated.center,5,4,0));
     expect(cuts.y).toHaveLength(0);
     expect(cuts.x).toHaveLength(2);
+  });
+  it("keeps simple radical intersections exact",()=>{
+    const coefficients=coefficientsFromEllipse([0,1],3,2,0);
+    const result=ellipseAxisCrossingTex(coefficients);
+    expect(result.x).toContain("\\sqrt{3}");
+    expect(result.x).toContain("3\\sqrt{3}");
+    expect(result.y).toContain("0");
+    const displaced=ellipseAxisCrossingTex(coefficientsFromEllipse([20,0],5,4,0));
+    expect(displaced.y).toBe("Ninguno");
   });
   it("computes perpendicular tangent and normal through the selected point",()=>{
     const t=ellipseTangentNormal(geom,0);
