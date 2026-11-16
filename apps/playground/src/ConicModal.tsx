@@ -79,12 +79,12 @@ export function ConicModal({onClose,onInsert}:Props) {
           {kind==="hyperbola"&&<label><input type="checkbox" checked={showAsymptotes} onChange={e=>setShowAsymptotes(e.target.checked)}/> Asíntotas</label>}
         </fieldset>
         {invalid&&<p role="alert">Revisa los valores: semiejes positivos, b ≤ a para elipse y p distinto de cero.</p>}
+        <footer className="bwjm-modal-footer">
+          <button className="bwjm-btn-secondary" onClick={onClose}>Cancelar</button>
+          <button className="bwjm-btn-primary" disabled={invalid} onClick={insert}>Insertar en documento</button>
+        </footer>
+        </>}
       </div>
-      <footer className="bwjm-modal-footer">
-        <button className="bwjm-btn-secondary" onClick={onClose}>Cancelar</button>
-        <button className="bwjm-btn-primary" disabled={invalid} onClick={insert}>Insertar en documento</button>
-      </footer>
-      </>}
     </section>
   </div>;
 }
