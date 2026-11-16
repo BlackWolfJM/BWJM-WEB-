@@ -11,6 +11,7 @@ export interface HyperbolaInteraction {
   center?:HyperbolaPoint;
   a?:number;
   b?:number;
+  rotation?:number;
   tangentParameter?:number;
 }
 const worldLocal=(g:HyperbolaGeometry,target:HyperbolaPoint):HyperbolaPoint=>{
