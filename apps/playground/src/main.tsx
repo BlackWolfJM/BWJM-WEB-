@@ -1301,15 +1301,6 @@ initialConditions:
             : node.type === "parametric2d" ? [node.x, node.y].join(" , ") : node.equation;
           cardHeader.appendChild(formula);
         }
-        if (node.type === "conic" && (!node.conicType || node.conicType === "circle") &&
-            node.showEquation !== false) {
-          const formula = document.createElement("div");
-          formula.className = "bwjm-node-equation";
-          const circle = resolveCircle(node);
-          formula.innerHTML = renderMathToString(circle.canonicalTex, false);
-          formula.title = circle.canonicalTex;
-          cardHeader.appendChild(formula);
-        }
         card.appendChild(cardHeader);
 
         const cardBody = document.createElement("div");
@@ -2045,10 +2036,6 @@ initialConditions:
                 const updatedReport = buildCircleReport(node, next);
                 report.replaceWith(updatedReport);
                 report = updatedReport;
-                if (node.showEquation !== false) {
-                  const headerEquation = cardHeader.querySelector(".bwjm-node-equation");
-                  if (headerEquation) headerEquation.innerHTML = renderMathToString(next.canonicalTex, false);
-                }
               },
               (center,radius) => {
                 openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
