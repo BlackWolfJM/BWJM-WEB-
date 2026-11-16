@@ -211,7 +211,7 @@ export function hyperbolaParametricTex(g:HyperbolaGeometry):string{
   const cos=Math.cos(g.rotation),sin=Math.sin(g.rotation),[h,k]=g.center;
   const expression=(base:number,a:number,b:number)=>{
     const pieces=[Math.abs(base)<1e-10?"":fmtN(base),
-      Math.abs(a)<1e-10?"":("\\pm "+fmtN(Math.abs(a))+"\\cosh t"),
+      Math.abs(a)<1e-10?"":((a<0?"\\mp ":"\\pm ")+fmtN(Math.abs(a))+"\\cosh t"),
       Math.abs(b)<1e-10?"":((b<0?"-":"+")+fmtN(Math.abs(b))+"\\sinh t")];
     return pieces.join("")||"0";
   };
