@@ -2283,6 +2283,32 @@ body {
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
+
+/* Circle properties use the same quiet, separated scientific readout as trajectories. */
+.bwjm-circle-report {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+.bwjm-circle-report .bwjm-trajectory-header strong {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+.bwjm-circle-report .bwjm-trajectory-values > div {
+  align-items: baseline;
+}
+.bwjm-circle-report .bwjm-trajectory-values dd {
+  min-width: 0;
+  overflow-x: auto;
+  font-size: 0.79rem;
+}
+.bwjm-circle-report .bwjm-trajectory-values dd .katex {
+  font-size: 1em;
+}
+
 .bwjm-document-rename-input {
   box-sizing: border-box;
   width: 195px;
