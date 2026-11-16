@@ -36,7 +36,7 @@ import { DocumentTabs } from "./DocumentTabs.js";
 import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
 import { createCrossProductDeterminant, createCrossProductEditor, createCrossProductReport } from "./CrossProductEditor.js";
 import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
-import { resetSurfaceColor, updateCircleInteraction, updateEllipseInteraction, updateParabolaInteraction, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
+import { resetSurfaceColor, updateCircleInteraction, updateEllipseInteraction, updateParabolaInteraction, updateHyperbolaInteraction, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
@@ -55,6 +55,11 @@ import { createParabolaSVG } from "./parabolaFigure.js";
 import { resolveParabola } from "./parabolaGeometry.js";
 import { mountParabolaDrag, type ParabolaInteraction } from "./parabolaDrag.js";
 import { mountParabolaControls } from "./parabolaControls.js";
+import { createHyperbolaSVG } from "./hyperbolaFigure.js";
+import { resolveHyperbola } from "./hyperbolaGeometry.js";
+import { buildHyperbolaReport } from "./hyperbolaReport.js";
+import { mountHyperbolaDrag,type HyperbolaInteraction } from "./hyperbolaDrag.js";
+import { mountHyperbolaControls } from "./hyperbolaControls.js";
 import { mountCircleControls } from "./circleControls.js";
 import { mountCircleDrag, type CircleInteraction } from "./circleDrag.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
@@ -1411,6 +1416,22 @@ initialConditions:
             ["showParametric", "Parametrización"],
             ["showEquation", "Ecuaciones"],
             ["showInteractiveControls", "Arrastrar puntos y controles locales"],
+          ] : node.type === "conic" && node.conicType === "hyperbola" ? [
+            ["showCenter", "Centro"],
+            ["showFocus", "Focos"],
+            ["showVertices", "Vértices"],
+            ["showCoVertices", "Extremos del eje conjugado"],
+            ["showAxes", "Ejes transverso y conjugado"],
+            ["showAsymptotes", "Asíntotas"],
+            ["showRectangle", "Rectángulo auxiliar"],
+            ["showDirectrices", "Directrices"],
+            ["showLatusRectum", "Lados rectos"],
+            ["showTangent", "Tangente"],
+            ["showNormal", "Normal"],
+            ["showIntersections", "Intersecciones"],
+            ["showParametric", "Parametrización"],
+            ["showEquation", "Ecuaciones"],
+            ["showInteractiveControls", "Arrastrar puntos geométricos"],
           ] : node.type === "line3d" ? [
             ["showPoint", "Mostrar punto P"],
             ["showDirection", "Mostrar vector director v"],
@@ -1466,7 +1487,10 @@ initialConditions:
                 ? ["showCenter","showFocus","showVertices","showCoVertices","showAxes","showEquation"].includes(key)
                 : node.conicType === "parabola"
                   ? ["showVertices","showFocus","showDirectrix","showAxes","showEquation"].includes(key)
-                  : ["showCenter", "showEquation"].includes(key)) :
+                  : node.conicType === "hyperbola"
+                    ? ["showCenter","showVertices","showFocus","showAxes",
+                        "showAsymptotes","showEquation"].includes(key)
+                    : ["showCenter", "showEquation"].includes(key)) :
               node.type === "crossproduct" ? ["showPlane", "showNormal", "showArea"].includes(key) :
               key === "showSteps" || (key === "animated" && node.type === "parametric2d") ||
               (key === "showVectors" && node.type === "flow2d");
@@ -2144,6 +2168,29 @@ initialConditions:
             };
             mountParabolaDrag(cardBody,node,geometry,previewParabola,persistParabola);
             mountParabolaControls(cardBody,node,geometry,previewParabola,persistParabola);
+          } else if (node.conicType === "hyperbola") {
+            const geometry=resolveHyperbola(node);
+            let report=buildHyperbolaReport(node,geometry);
+            cardBody.appendChild(report);
+            const previewHyperbola=(next:typeof geometry,change:HyperbolaInteraction={})=>{
+              const viewNode:typeof node={...node,
+                tangentParameter:change.tangentParameter??node.tangentParameter,
+                viewCenter:node.viewCenter??geometry.center,
+                viewSpan:node.viewSpan??Math.max(4,geometry.c*1.7,geometry.b*2.1)};
+              const fresh=createHyperbolaSVG(viewNode,next);
+              figure.replaceWith(fresh);
+              figure=fresh;
+              const newReport=buildHyperbolaReport(viewNode,next);
+              report.replaceWith(newReport);
+              report=newReport;
+            };
+            const persistHyperbola=(change:HyperbolaInteraction)=>{
+              openGraphSettingsRef.current.add(node.type+":"+node.range.start.offset);
+              setMarkdown(previous=>updateHyperbolaInteraction(previous,node.range,
+                node,geometry,change));
+            };
+            mountHyperbolaDrag(cardBody,node,geometry,previewHyperbola,persistHyperbola);
+            mountHyperbolaControls(cardBody,node,geometry,previewHyperbola,persistHyperbola);
           }
           const button = document.createElement("button");
           button.type = "button";
