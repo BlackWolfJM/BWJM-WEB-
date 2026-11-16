@@ -482,6 +482,8 @@ export interface ConicNode extends MathMDNodeBase {
   showVertices?: boolean;
   showAxes?: boolean;
   showAsymptotes?: boolean;
+  showRectangle?: boolean;
+  hyperbolaBranch?: 1 | -1;
   showDirectrices?: boolean;
   showCoVertices?: boolean;
   showLatusRectum?: boolean;
@@ -1746,6 +1748,8 @@ export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   showVertices: z.boolean().optional(),
   showAxes: z.boolean().optional(),
   showAsymptotes: z.boolean().optional(),
+  showRectangle: z.boolean().optional(),
+  hyperbolaBranch: z.union([z.literal(1),z.literal(-1)]).optional(),
   showDirectrices: z.boolean().optional(),
   showCoVertices: z.boolean().optional(),
   showLatusRectum: z.boolean().optional(),
@@ -1817,6 +1821,15 @@ export function validateConic(data: any, ctx: z.RefinementCtx): void {
     if (data.diffDistances !== undefined && data.diffDistances <= 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Diferencia de distancias debe ser positiva", path: ["diffDistances"] });
     }
+    if (type === "hyperbola" && data.focus1 && data.focus2) {
+      const distance=Math.hypot(data.focus2[0]-data.focus1[0],
+        data.focus2[1]-data.focus1[1]);
+      if(data.diffDistances===undefined||data.diffDistances>=distance) {
+        ctx.addIssue({code:z.ZodIssueCode.custom,
+          message:"Para la hipérbola, 0 < diferencia de distancias < distancia entre focos",
+          path:["diffDistances"]});
+      }
+    }
   } else if (mode === "center-radius") {
     if (!data.center || !data.radius) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo center-radius requiere center y radius", path: ["mode"] });
@@ -1848,6 +1861,23 @@ export function validateConic(data: any, ctx: z.RefinementCtx): void {
     const disc = (data.B??0)**2 - 4 * (data.A??0) * (data.C??0);
     if (type !== "parabola" && disc === 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Discriminante B² - 4AC = 0: parábola degenerada o rectas", path: ["mode"] });
+    }
+    if (type === "hyperbola" &&
+        [data.A,data.B,data.C,data.D,data.E,data.F].every(Number.isFinite)) {
+      const {A,B,C,D,E,F}=data;
+      const scale=Math.max(Math.abs(A),Math.abs(B),Math.abs(C));
+      const det=4*A*C-B*B;
+      if(scale<=1e-12||det>=-1e-10*scale*scale){
+        ctx.addIssue({code:z.ZodIssueCode.custom,
+          message:"Se requiere B²−4AC>0 para una hipérbola real",path:["mode"]});
+      }else{
+        const h=(B*E-2*C*D)/det,k=(B*D-2*A*E)/det;
+        const rhs=-(A*h*h+B*h*k+C*k*k+D*h+E*k+F);
+        if(!Number.isFinite(rhs)||Math.abs(rhs)<=1e-11*Math.max(1,Math.abs(F),Math.abs(rhs))) {
+          ctx.addIssue({code:z.ZodIssueCode.custom,
+            message:"La ecuación representa dos rectas o una hipérbola degenerada",path:["mode"]});
+        }
+      }
     }
     if (type === "parabola" &&
         [data.A,data.B,data.C,data.D,data.E,data.F].every(Number.isFinite)) {
