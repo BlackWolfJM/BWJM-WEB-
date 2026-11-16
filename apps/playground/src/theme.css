@@ -4156,3 +4156,49 @@ code.bwjm-property-value {
   color: var(--text-secondary);
   margin-top: .3rem;
 }
+
+
+/* Advanced parabola inherits the ellipse scientific panel without colliding equations. */
+.bwjm-parabola-composer { display: grid; gap: .85rem; min-width: 0; }
+.bwjm-parabola-composer .bwjm-modal-grid { align-items: start; }
+.bwjm-parabola-options label {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  min-height: 26px;
+  font-size: .8rem;
+}
+.bwjm-parabola-options input[type="checkbox"] { flex: none; }
+.bwjm-parabola-composer .bwjm-modal-field > small,
+.bwjm-parabola-note {
+  font-size: .75rem;
+  color: var(--text-secondary);
+  margin: .2rem 0 .6rem;
+}
+.bwjm-parabola-preview-report { min-width: 0; margin-top: .6rem; }
+.bwjm-parabola-report .bwjm-circle-main-equation-math,
+.bwjm-parabola-report .bwjm-circle-detail-list dd {
+  min-width: 0;
+  overflow-x: auto;
+}
+.bwjm-parabola-report .bwjm-circle-detail-list dd { max-width: 75%; }
+.bwjm-parabola-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+.bwjm-parabola-drag-handle:hover,
+.bwjm-parabola-drag-handle:focus-visible {
+  stroke: #f59e0b;
+  stroke-width: 2px;
+  outline: none;
+}
+.bwjm-parabola-dragging,
+.bwjm-parabola-dragging .bwjm-parabola-drag-handle {
+  cursor: grabbing;
+  touch-action: none;
+  user-select: none;
+}
+@media (max-width:680px) {
+  .bwjm-parabola-composer .bwjm-modal-grid { grid-template-columns: minmax(0,1fr); }
+  .bwjm-parabola-report .bwjm-circle-details { grid-template-columns: minmax(0,1fr); }
+}

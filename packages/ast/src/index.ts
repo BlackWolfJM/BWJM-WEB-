@@ -508,6 +508,7 @@ export interface ConicNode extends MathMDNodeBase {
   secantStartAngle?: number;
   secantEndAngle?: number;
   tangentAngle?: number;
+  tangentParameter?: number;
   color?: string;
   colorFocus?: string;
   colorDirectrix?: string;
@@ -1769,6 +1770,7 @@ export const conicBaseSchema = mathmdNodeBaseSchema.extend({
   secantStartAngle: z.number().finite().min(-3600).max(3600).optional(),
   secantEndAngle: z.number().finite().min(-3600).max(3600).optional(),
   tangentAngle: z.number().finite().min(-3600).max(3600).optional(),
+  tangentParameter: z.number().finite().min(-1000).max(1000).optional(),
   color: z.string().optional(),
   colorFocus: z.string().optional(),
   colorDirectrix: z.string().optional(),
@@ -1844,8 +1846,25 @@ export function validateConic(data: any, ctx: z.RefinementCtx): void {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Modo general requiere A, B, C, D, E, F", path: ["mode"] });
     }
     const disc = (data.B??0)**2 - 4 * (data.A??0) * (data.C??0);
-    if (disc === 0) {
+    if (type !== "parabola" && disc === 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Discriminante B² - 4AC = 0: parábola degenerada o rectas", path: ["mode"] });
+    }
+    if (type === "parabola" &&
+        [data.A,data.B,data.C,data.D,data.E,data.F].every(Number.isFinite)) {
+      const {A,B,C,D,E}=data;
+      const scale=Math.max(Math.abs(A),Math.abs(B),Math.abs(C));
+      const det=4*A*C-B*B,lambda=A+C;
+      const transverse=Math.abs(A)>=Math.abs(C)?[A,B/2]:[B/2,C];
+      const norm=Math.hypot(...transverse);
+      const axial=norm>0?[-transverse[1]/norm,transverse[0]/norm]:[0,0];
+      const lineComponent=D*axial[0]+E*axial[1];
+      if(scale<=1e-12||Math.abs(lambda)<=1e-12*scale||
+         Math.abs(det)>1e-9*scale*scale||
+         Math.abs(lineComponent)<=1e-10*Math.max(1,Math.abs(D),Math.abs(E))) {
+        ctx.addIssue({code:z.ZodIssueCode.custom,
+          message:"La ecuación debe ser una parábola no degenerada (B²−4AC=0)",
+          path:["mode"]});
+      }
     }
   } else if (mode === "three-points") {
     if (!data.pointA || !data.pointB || !data.pointC) {
@@ -1872,6 +1891,16 @@ export function validateConic(data: any, ctx: z.RefinementCtx): void {
       !data.tangentPoint) {
     ctx.addIssue({ code: z.ZodIssueCode.custom,
       message: "El modo de tangente por punto requiere las coordenadas del punto", path: ["tangentPoint"] });
+  }
+  if (type === "parabola" && mode === "focus-directrix" &&
+      data.focus && data.directrix) {
+    const {A,B,C}=data.directrix,norm=Math.hypot(A,B);
+    const dist=A*data.focus[0]+B*data.focus[1]+C;
+    if(norm<=1e-10 || Math.abs(dist)<=1e-10*norm) {
+      ctx.addIssue({code:z.ZodIssueCode.custom,
+        message:"La directriz debe ser una recta y el foco debe estar fuera de ella",
+        path:["directrix"]});
+    }
   }
   if (type === "ellipse" && mode === "foci" && data.focus1 && data.focus2) {
     const dist = Math.hypot(data.focus2[0]-data.focus1[0],data.focus2[1]-data.focus1[1]);

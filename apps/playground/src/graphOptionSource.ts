@@ -6,8 +6,11 @@ import type { CircleInteraction } from "./circleDrag.js";
 import { ellipseFromCenter, resolveEllipse, type EllipseGeometry } from "./ellipseGeometry.js";
 import { coefficientsFromEllipse } from "./ellipseEquation.js";
 import type { EllipseInteraction } from "./ellipseDrag.js";
+import { coefficientsFromParabola, parabolaFromVertex,
+  resolveParabola, type ParabolaGeometry } from "./parabolaGeometry.js";
+import type { ParabolaInteraction } from "./parabolaDrag.js";
 
-type GraphOptionValue = boolean | number | string | readonly number[];
+type GraphOptionValue = boolean | number | string | readonly number[] | Record<string,number>;
 
 type SupportedBlock = "conic" | "curve3d" | "surface3d" | "parametric2d" | "vector2d" | "vector3d" |
   "crossproduct" | "line3d" | "plane3d" | "plot2d" | "vectorfield2d" | "flow2d" | "datachart" | "calculusviz";
@@ -112,7 +115,7 @@ export function updateGraphOption(
       "showCenter","showRadius","showDiameter","showChord","showSecant",
       "showTangent","showIntersections","showEquation","showInteractiveControls",
       "showFocus","showVertices","showAxes","showDirectrices","showCoVertices","showLatusRectum",
-      "showNormal","showParametric",
+      "showNormal","showParametric","showDirectrix",
     ]);
     if (!allowed.has(key) || typeof value !== "boolean") return source;
     const updated=updateGraphField(source,range,blockType,key,value);
@@ -345,4 +348,65 @@ export function updateEllipseInteraction(
       Math.abs(verified.b-b)>1e-5*Math.max(1,b))return source;
   }catch{return source;}
   return nextSource;
+}
+
+
+/**
+ * Update one parabola atomically, preserving canonical, general or focus-directrix
+ * construction. A stable viewport prevents the curve jumping under the pointer.
+ */
+export function updateParabolaInteraction(
+  source:string,range:SourceRange,node:ConicNode,original:ParabolaGeometry,
+  change:ParabolaInteraction,
+):string{
+  const vertex=change.vertex??original.vertex;
+  const p=change.p??original.p,rotation=change.rotation??original.rotation;
+  let shape:ParabolaGeometry;
+  try{shape=parabolaFromVertex(vertex,p,"x",rotation);}catch{return source;}
+  const patches:Array<[string,GraphOptionValue]>=[];
+  const moving=Boolean(change.vertex||change.p!==undefined||change.rotation!==undefined);
+  if(moving){
+    if(node.mode==="focus-directrix"){
+      const scale=Math.hypot(node.directrix?.A??0,node.directrix?.B??0);
+      if(!(scale>0))return source;
+      patches.push(["focus",shape.focus],["directrix",{
+        A:shape.directrix.a*scale,B:shape.directrix.b*scale,C:shape.directrix.c*scale,
+      }]);
+    }else if(node.mode==="general"){
+      const factor=(node.A??0)+(node.C??0);
+      if(!Number.isFinite(factor)||Math.abs(factor)<1e-12)return source;
+      const next=coefficientsFromParabola(vertex,p,rotation);
+      for(const key of ["A","B","C","D","E","F"] as const)
+        patches.push([key,next[key]*factor]);
+    }else if(node.mode==="canonical"){
+      patches.push(["center",vertex],["focalParameter",p],
+        ["rotation",rotation-(node.axis==="y"?Math.PI/2:0)]);
+    }else return source;
+  }
+  if(change.tangentParameter!==undefined){
+    if(!Number.isFinite(change.tangentParameter)||Math.abs(change.tangentParameter)>1000)return source;
+    patches.push(["tangentParameter",change.tangentParameter]);
+  }
+  if(patches.length===0)return source;
+  if(!node.viewCenter)patches.push(["viewCenter",original.vertex]);
+  if(!node.viewSpan)patches.push(["viewSpan",Math.max(3,Math.abs(original.p)*5)]);
+  let updated=source,current=range;
+  for(const [key,value] of patches){
+    const next=updateGraphField(updated,current,"conic",key,value);
+    current={...current,end:{...current.end,offset:current.end.offset+next.length-updated.length}};
+    updated=next;
+  }
+  const parsed=parseMathMD(updated.slice(range.start.offset,current.end.offset));
+  const result=parsed.children[0];
+  if(parsed.diagnostics.some(d=>d.severity==="error")||
+    result?.type!=="conic"||result.conicType!=="parabola")return source;
+  try{
+    const verified=resolveParabola(result);
+    if(Math.hypot(verified.vertex[0]-vertex[0],verified.vertex[1]-vertex[1])>
+        1e-5*Math.max(1,Math.abs(p))||
+       Math.abs(verified.p-p)>1e-5*Math.max(1,Math.abs(p))||
+       Math.hypot(Math.cos(verified.rotation)-Math.cos(rotation),
+         Math.sin(verified.rotation)-Math.sin(rotation))>1e-5)return source;
+  }catch{return source;}
+  return updated;
 }

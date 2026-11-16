@@ -36,7 +36,7 @@ import { DocumentTabs } from "./DocumentTabs.js";
 import { RIEMANN_LESSON_ID, computeRiemannLesson, updateRiemannLessonReport } from "./riemannLesson.js";
 import { createCrossProductDeterminant, createCrossProductEditor, createCrossProductReport } from "./CrossProductEditor.js";
 import { supportsAdaptiveParameters } from "./adaptiveGraphParameters.js";
-import { resetSurfaceColor, updateCircleInteraction, updateEllipseInteraction, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
+import { resetSurfaceColor, updateCircleInteraction, updateEllipseInteraction, updateParabolaInteraction, updateCrossProductVector, updateGraphOption, updateGraphNumericOption } from "./graphOptionSource.js";
 import { DocumentSearch, type TextMatch } from "./DocumentSearch.js";
 import { useDocumentWorkspace } from "./workspaceDocuments.js";
 import { IconAtom, IconCheck } from "./icons.js";
@@ -50,6 +50,11 @@ import { createEllipseSVG } from "./ellipseFigure.js";
 import { resolveEllipse } from "./ellipseGeometry.js";
 import { mountEllipseControls } from "./ellipseControls.js";
 import { mountEllipseDrag, type EllipseInteraction } from "./ellipseDrag.js";
+import { buildParabolaReport } from "./parabolaReport.js";
+import { createParabolaSVG } from "./parabolaFigure.js";
+import { resolveParabola } from "./parabolaGeometry.js";
+import { mountParabolaDrag, type ParabolaInteraction } from "./parabolaDrag.js";
+import { mountParabolaControls } from "./parabolaControls.js";
 import { mountCircleControls } from "./circleControls.js";
 import { mountCircleDrag, type CircleInteraction } from "./circleDrag.js";
 import type { FormulaKind, FormulaMode } from "./formulaComposer.js";
@@ -1394,6 +1399,18 @@ initialConditions:
             ["showParametric", "Parametrización"],
             ["showEquation", "Ecuación"],
             ["showInteractiveControls", "Arrastrar centro y puntos geométricos"],
+          ] : node.type === "conic" && node.conicType === "parabola" ? [
+            ["showVertices", "Vértice"],
+            ["showFocus", "Foco"],
+            ["showDirectrix", "Directriz"],
+            ["showAxes", "Eje de simetría y apertura"],
+            ["showLatusRectum", "Lado recto"],
+            ["showTangent", "Tangente"],
+            ["showNormal", "Normal"],
+            ["showIntersections", "Intersecciones con los ejes"],
+            ["showParametric", "Parametrización"],
+            ["showEquation", "Ecuaciones"],
+            ["showInteractiveControls", "Arrastrar puntos y controles locales"],
           ] : node.type === "line3d" ? [
             ["showPoint", "Mostrar punto P"],
             ["showDirection", "Mostrar vector director v"],
@@ -1447,7 +1464,9 @@ initialConditions:
             const configured = (node as unknown as Record<string, unknown>)[key];
             const defaultOn = node.type === "conic" ? (node.conicType === "ellipse"
                 ? ["showCenter","showFocus","showVertices","showCoVertices","showAxes","showEquation"].includes(key)
-                : ["showCenter", "showEquation"].includes(key)) :
+                : node.conicType === "parabola"
+                  ? ["showVertices","showFocus","showDirectrix","showAxes","showEquation"].includes(key)
+                  : ["showCenter", "showEquation"].includes(key)) :
               node.type === "crossproduct" ? ["showPlane", "showNormal", "showArea"].includes(key) :
               key === "showSteps" || (key === "animated" && node.type === "parametric2d") ||
               (key === "showVectors" && node.type === "flow2d");
@@ -2102,6 +2121,29 @@ initialConditions:
             mountEllipseControls(cardBody,node,geometry,
               next => previewEllipse(next,{center:next.center,a:next.a,b:next.b}),
               (center,a,b) => persistEllipse({center:[center[0],center[1]],a,b}));
+          } else if (node.conicType === "parabola") {
+            const geometry = resolveParabola(node);
+            let report = buildParabolaReport(node,geometry);
+            cardBody.appendChild(report);
+            const previewParabola = (next:typeof geometry,change:ParabolaInteraction={}) => {
+              const viewNode:typeof node = {...node,
+                tangentParameter:change.tangentParameter??node.tangentParameter,
+                viewCenter:node.viewCenter??geometry.vertex,
+                viewSpan:node.viewSpan??Math.max(3,Math.abs(geometry.p)*5)};
+              const fresh=createParabolaSVG(viewNode,next);
+              figure.replaceWith(fresh);
+              figure=fresh;
+              const updatedReport=buildParabolaReport(viewNode,next);
+              report.replaceWith(updatedReport);
+              report=updatedReport;
+            };
+            const persistParabola = (change:ParabolaInteraction) => {
+              openGraphSettingsRef.current.add(node.type + ":" + node.range.start.offset);
+              setMarkdown(previous => updateParabolaInteraction(previous,node.range,
+                node,geometry,change));
+            };
+            mountParabolaDrag(cardBody,node,geometry,previewParabola,persistParabola);
+            mountParabolaControls(cardBody,node,geometry,previewParabola,persistParabola);
           }
           const button = document.createElement("button");
           button.type = "button";
