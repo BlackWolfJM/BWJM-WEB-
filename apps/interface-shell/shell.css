@@ -1,0 +1,35 @@
+/* The original Studio theme is kept in theme.css. These rules only adapt its layout
+   to the standalone interface and supply empty document surfaces. */
+html, body { margin: 0; width: 100%; height: 100%; }
+body { overflow: hidden; }
+[hidden] { display: none !important; }
+button, input, textarea { font: inherit; }
+.bwjm-app-container { height: 100dvh; }
+.shell-search { flex: 1; display: flex; justify-content: center; min-width: 0; }
+.shell-search input { width: min(100%, 340px); padding: .42rem .7rem; border: 1px solid var(--border); border-radius: 7px; color: var(--text-main); background: var(--bg-panel); }
+.bwjm-document-tab-list { flex: 1; min-width: 0; }
+.bwjm-document-tab { display: flex; align-items: center; }
+.bwjm-document-tab > button:first-child { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+.bwjm-document-tab-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bwjm-document-sidebar { display: flex; flex-direction: column; }
+.bwjm-document-sidebar.bwjm-sidebar-mode-hidden { display: none; }
+.bwjm-document-sidebar.bwjm-sidebar-mode-collapsed { width: 48px; min-width: 48px; }
+.bwjm-document-sidebar.bwjm-sidebar-mode-collapsed .bwjm-document-sidebar-title,
+.bwjm-document-sidebar.bwjm-sidebar-mode-collapsed .bwjm-document-sidebar-content,
+.bwjm-document-sidebar.bwjm-sidebar-mode-collapsed .bwjm-document-sidebar-tabs { display: none; }
+.bwjm-document-sidebar-tabs { display: flex; }
+.bwjm-document-sidebar-tab { flex: 1; padding: .6rem .3rem; color: var(--text-secondary); background: transparent; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }
+.bwjm-document-sidebar-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.bwjm-document-sidebar-content { padding: 1rem; overflow: auto; }
+.shell-page { min-height: 70vh; max-width: 800px; margin: 0 auto; padding: 2rem; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 8px; }
+.shell-page:empty::before { content: "Vista del documento"; color: var(--text-secondary); }
+.shell-empty { color: var(--text-secondary); }
+.shell-status { position: fixed; bottom: 1rem; right: 1rem; padding: .6rem .8rem; border-radius: 7px; background: var(--bg-surface); border: 1px solid var(--border); box-shadow: 0 6px 20px #0002; color: var(--text-main); display: none; z-index: 5; }
+.shell-status.visible { display: block; }
+.shell-search input:focus-visible, .bwjm-app-container button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .bwjm-studio-subtitle, .bwjm-studio-header-meta, .shell-search { display: none; }
+  .bwjm-sidebar-left { width: 200px; min-width: 200px; }
+  .bwjm-main-split { flex-direction: column; }
+  .bwjm-editor-panel, .bwjm-preview-panel { min-height: 0; }
+}
